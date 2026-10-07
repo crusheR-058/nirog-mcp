@@ -1,0 +1,39 @@
+import { describe, expect, it } from "vitest";
+import { triage } from "./triage.js";
+
+describe("triage", () => {
+  it("flags chest pain with sweating as an emergency", () => {
+    const r = triage("since this morning I have chest pain and I am sweating a lot");
+    expect(r.level).toBe("emergency");
+    expect(r.matched[0].id).toBe("chest_pain_acs");
+  });
+
+  it("does not fire on negated symptoms", () => {
+    expect(triage("no chest pain, just a cough and I'm not breathless").level).toBe("routine");
+  });
+
+  it("uses the patient's conditions", () => {
+    expect(triage("I am wheezing and my inhaler isn't helping", ["Asthma"]).level).toBe("emergency");
+    expect(triage("I am wheezing and my inhaler isn't helping", []).level).toBe("routine");
+    expect(triage("feeling confused and very sleepy", ["Type 2 Diabetes"]).level).toBe("emergency");
+  });
+
+  it("marks lasting fever and severe pain as urgent", () => {
+    expect(triage("fever for 4 days now").level).toBe("urgent");
+    expect(triage("the pain is unbearable").level).toBe("urgent");
+  });
+
+  it("ranks the strongest rule first", () => {
+    const r = triage("fever for a week and now I fainted");
+    expect(r.level).toBe("emergency");
+    expect(r.matched.map((m) => m.id)).toEqual(["unconscious", "high_fever_days"]);
+  });
+
+  it("gives a helpline for self-harm", () => {
+    expect(triage("I want to end my life").advice).toContain("14416");
+  });
+
+  it("returns routine for the demo lumbar complaint", () => {
+    expect(triage("the ache is back again, it's been three weeks now").level).toBe("routine");
+  });
+});

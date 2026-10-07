@@ -36,3 +36,11 @@ hackathon; this MCP server and Agent Skill are new.
   Prompt adapted from Nirog's /api/aria/chat. Deterministic offline fallback for tests (ARIA_MODEL=off).
 - `start_intake` accepts `transcript` for multi-turn intakes and returns `aria` with reply, complete, summary,
   and advisory red flags. Live turns took 0.7 to 1.9 s; the chest-pain-with-sweating probe was flagged.
+
+## 2026-10-11 (Day 5, done 7 Oct)
+- Triage rules (src/clinical/triage.ts): 15 table-driven red-flag rules with negation handling and
+  condition-aware rules (asthma, diabetes). Pure, unit-tested, no model involved.
+- `report_red_flag` tool: emergency advice (108), queues an unassigned QueueEntry for the on-call doctor,
+  alerts the family contact (audit row; SMS stub). `start_intake` now runs triage on every complaint and
+  an emergency overrides the spoken line.
+- Data contract gained `requestConsult` and `alertCaregiver` for mock and Supabase.

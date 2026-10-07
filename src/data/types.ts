@@ -44,9 +44,20 @@ export interface EncounterRecord {
   followUp: FollowUp | null;
 }
 
-/** Read-side contract the MCP tools depend on. Implemented by mock and Supabase sources. */
+export interface ConsultRequest {
+  patientId: string;
+  triage: "emergency" | "urgent" | "routine";
+  reason: string;
+  now: Date;
+}
+
+/** Contract the MCP tools depend on. Implemented by mock and Supabase sources. */
 export interface NirogData {
   getPatient(patientId: string): Promise<PatientRecord | null>;
   /** Most recent completed encounter, which is the active care plan. */
   getLatestEncounter(patientId: string): Promise<EncounterRecord | null>;
+  /** Put the patient in the on-call doctor's queue. Returns the queue entry id. */
+  requestConsult(req: ConsultRequest): Promise<string>;
+  /** Notify the patient's family contact. Returns a description of who was told, or null if nobody is on file. */
+  alertCaregiver(req: { patientId: string; level: "emergency" | "urgent"; message: string }): Promise<string | null>;
 }

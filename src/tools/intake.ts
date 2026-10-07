@@ -7,6 +7,7 @@ import type { MemoryStore } from "../memory/types.js";
 import { REGION_LABELS } from "../clinical/regions.js";
 import { nextQuestion, type AriaResult } from "../ai/aria.js";
 import type { ConverseFn, ConverseTurn } from "../ai/converse.js";
+import { triage, type TriageLevel } from "../clinical/triage.js";
 
 export interface IntakeResult {
   patient: { id: string; name: string };
@@ -16,6 +17,8 @@ export interface IntakeResult {
   memory: { degraded: boolean; reason?: string; embedProvider: string; latencyMs: number };
   /** ARIA's next question or handover line. `complete` means the intake is ready for a doctor. */
   aria: (AriaResult & { model: string }) | { error: string };
+  /** Rules-based triage of this complaint. When not routine, call report_red_flag to escalate. */
+  triage: { level: TriageLevel; matched: string[] };
   spoken: string;
 }
 
@@ -55,7 +58,11 @@ export async function runIntake(
   // Recall is spoken once, on the opening turn; later turns carry it in the data only.
   const openingTurn = !input.transcript || input.transcript.length === 0;
   const ariaLine = "reply" in aria ? aria.reply : "I could not reach the intake assistant, but your complaint is recorded and a doctor will see it.";
-  const spoken = [openingTurn ? recallLine : null, ariaLine].filter(Boolean).join(" ");
+  const t = triage(input.complaint, patient.conditions);
+  const spoken =
+    t.level === "emergency"
+      ? `${t.advice} I am escalating this now.`
+      : [openingTurn ? recallLine : null, ariaLine].filter(Boolean).join(" ");
 
   return {
     patient: { id: patient.id, name: patient.fullName },
@@ -71,6 +78,7 @@ export async function runIntake(
       : null,
     memory: { degraded: r.degraded, reason: r.degradedReason, embedProvider: r.embedProvider, latencyMs: r.latencyMs },
     aria,
+    triage: { level: t.level, matched: t.matched.map((m) => m.id) },
     spoken,
   };
 }

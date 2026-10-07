@@ -1,4 +1,5 @@
-import type { EncounterRecord, NirogData, PatientRecord } from "./types.js";
+import { randomUUID } from "node:crypto";
+import type { ConsultRequest, EncounterRecord, NirogData, PatientRecord } from "./types.js";
 
 /** Demo fixtures mirroring the Nirog doctor portal seed, so demos work with no database. */
 export const MOCK_PATIENTS: PatientRecord[] = [
@@ -81,6 +82,10 @@ export const MOCK_ENCOUNTERS: EncounterRecord[] = [
 ];
 
 export class MockData implements NirogData {
+  /** Consults requested through this source, for tests and the demo log. */
+  consults: Array<ConsultRequest & { id: string }> = [];
+  alerts: Array<{ patientId: string; message: string }> = [];
+
   constructor(
     private patients: PatientRecord[] = MOCK_PATIENTS,
     private encounters: EncounterRecord[] = MOCK_ENCOUNTERS,
@@ -96,5 +101,17 @@ export class MockData implements NirogData {
         .filter((e) => e.patientId === patientId && e.endedAt)
         .sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0] ?? null
     );
+  }
+
+  async requestConsult(req: ConsultRequest) {
+    const id = `q_${randomUUID().slice(0, 8)}`;
+    this.consults.push({ ...req, id });
+    return id;
+  }
+
+  async alertCaregiver(req: { patientId: string; level: "emergency" | "urgent"; message: string }) {
+    // Demo: every patient has a family contact on the account's phone. Real SMS is out of scope.
+    this.alerts.push({ patientId: req.patientId, message: req.message });
+    return "family contact on the registered phone (SMS stub)";
   }
 }

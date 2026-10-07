@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getDataSource } from "./data/index.js";
 import { registerCarePlanTool } from "./tools/care-plan.js";
 import { registerIntakeTool } from "./tools/intake.js";
+import { registerRedFlagTool } from "./tools/red-flag.js";
 import { getMemory } from "./memory/index.js";
 
 export const SERVER_NAME = "nirog-mcp";
@@ -38,6 +39,7 @@ export async function createNirogServer(): Promise<McpServer> {
   const { store, embedder } = await getMemory();
   registerCarePlanTool(server, data);
   registerIntakeTool(server, { data, store, embedder });
+  registerRedFlagTool(server, data);
 
   return server;
 }
