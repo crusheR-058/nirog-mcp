@@ -35,7 +35,7 @@ server runs with no database. `NIROG_DATA_SOURCE=supabase` reads the live Nirog 
 | Tool | Status |
 |---|---|
 | `ping` | done |
-| `get_care_plan` | done — active medicines with times of day, pending tests, follow-up due date, plus a `spoken` summary |
+| `get_care_plan` | done: active medicines with times of day, pending tests, follow-up due date, plus a `spoken` summary |
 | `start_intake` | planned |
 | `report_red_flag` | planned |
 
