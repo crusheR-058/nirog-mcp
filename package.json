@@ -4,8 +4,8 @@
   "description": "MCP server and Agent Skill bringing Nirog telehealth intake to Alexa+",
   "main": "dist/http.js",
   "scripts": {
-    "dev": "tsx watch src/http.ts",
-    "start": "node dist/http.js",
+    "dev": "tsx --env-file-if-exists=.env watch src/http.ts",
+    "start": "node --env-file-if-exists=.env dist/http.js",
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
@@ -23,6 +23,7 @@
   "type": "module",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
+    "@supabase/supabase-js": "^2.117.2",
     "express": "^5.2.1",
     "zod": "^4.6.5"
   },

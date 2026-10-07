@@ -1,5 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { getDataSource } from "./data/index.js";
+import { registerCarePlanTool } from "./tools/care-plan.js";
 
 export const SERVER_NAME = "nirog-mcp";
 export const SERVER_VERSION = "0.1.0";
@@ -29,6 +31,8 @@ export function createNirogServer(): McpServer {
       ],
     }),
   );
+
+  registerCarePlanTool(server, getDataSource());
 
   return server;
 }
