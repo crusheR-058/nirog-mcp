@@ -47,7 +47,7 @@ flag, is arithmetic a doctor can check by hand. No model decides it.
 |---|---|
 | `ping` | done |
 | `get_care_plan` | done: active medicines with times of day, pending tests, follow-up due date, plus a `spoken` summary |
-| `start_intake` | done: records the complaint, recalls earlier complaints that meant the same thing in different words, flags recurrence, says so when memory is unreachable |
+| `start_intake` | done: records the complaint, recalls earlier complaints that meant the same thing in different words, flags recurrence, then ARIA (GPT-OSS 120B on Bedrock) asks the next question or hands over to a doctor with a summary. Pass `transcript` for later turns. Says so when memory is unreachable |
 | `report_red_flag` | planned |
 
 ## Licence

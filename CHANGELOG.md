@@ -29,3 +29,10 @@ hackathon; this MCP server and Agent Skill are new.
   inherits the lower-back region, and raises the recurrent flag, matching the figures in the Nirog README.
 - Chose Supabase pgvector for live memory. Added `pnpm db:migrate` (creates tables, seeds the demo history,
   idempotent) and `pnpm verify` (connectivity plus a live recall check).
+
+## 2026-10-10 (Day 4, done 7 Oct)
+- ARIA on Bedrock (src/ai): GPT-OSS 120B asks the next intake question with the record, recall line, and
+  recurrence flag as context, three-question budget, then hands over with a plain-language summary.
+  Prompt adapted from Nirog's /api/aria/chat. Deterministic offline fallback for tests (ARIA_MODEL=off).
+- `start_intake` accepts `transcript` for multi-turn intakes and returns `aria` with reply, complete, summary,
+  and advisory red flags. Live turns took 0.7 to 1.9 s; the chest-pain-with-sweating probe was flagged.

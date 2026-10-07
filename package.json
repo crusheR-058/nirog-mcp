@@ -4,7 +4,7 @@
   "description": "MCP server and Agent Skill bringing Nirog telehealth intake to Alexa+",
   "main": "dist/http.js",
   "scripts": {
-    "dev": "tsx --env-file-if-exists=.env watch src/http.ts",
+    "dev": "tsx watch --env-file-if-exists=.env src/http.ts",
     "start": "node --env-file-if-exists=.env dist/http.js",
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
