@@ -30,13 +30,24 @@ Choose transport "Streamable HTTP", URL `http://127.0.0.1:3333/mcp`, connect, an
 server runs with no database. `NIROG_DATA_SOURCE=supabase` reads the live Nirog doctor-portal project; copy
 `.env.example` to `.env` and fill in `SUPABASE_URL` and `SUPABASE_SERVICE_KEY`.
 
+## Clinical memory
+
+`MEMORY_STORE=memory` (default) keeps complaints in process, seeded with the Nirog demo history for Rahul.
+`MEMORY_STORE=pg` uses Postgres at `MEMORY_DATABASE_URL`: Supabase with pgvector (`MEMORY_PG_FLAVOUR=pgvector`)
+or CockroachDB (`cockroach`). `EMBEDDER=bedrock` uses Titan Text Embeddings V2; the default is a deterministic
+offline embedder so tests and demos need no cloud.
+
+The lexicon, region inheritance, and recurrence rule are ported from the Nirog repo
+(https://github.com/Shivang-creator/nirog, MIT). The one claim the system makes about a patient, the recurrence
+flag, is arithmetic a doctor can check by hand. No model decides it.
+
 ## Tools
 
 | Tool | Status |
 |---|---|
 | `ping` | done |
 | `get_care_plan` | done: active medicines with times of day, pending tests, follow-up due date, plus a `spoken` summary |
-| `start_intake` | planned |
+| `start_intake` | done: records the complaint, recalls earlier complaints that meant the same thing in different words, flags recurrence, says so when memory is unreachable |
 | `report_red_flag` | planned |
 
 ## Licence

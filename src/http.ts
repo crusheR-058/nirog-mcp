@@ -15,7 +15,7 @@ app.get("/health", (_req: Request, res: Response) => {
 // Stateless Streamable HTTP: a new server + transport per request.
 // This keeps the service horizontally scalable on App Runner / Lambda.
 async function handleMcp(req: Request, res: Response) {
-  const server = createNirogServer();
+  const server = await createNirogServer();
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
   res.on("close", () => {
     void transport.close();

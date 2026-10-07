@@ -5,7 +5,7 @@ import { createNirogServer } from "./server.js";
 
 async function connectedClient() {
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  const server = createNirogServer();
+  const server = await createNirogServer();
   await server.connect(serverTransport);
   const client = new Client({ name: "test", version: "0.0.0" });
   await client.connect(clientTransport);

@@ -2,6 +2,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { getDataSource } from "./data/index.js";
 import { registerCarePlanTool } from "./tools/care-plan.js";
+import { registerIntakeTool } from "./tools/intake.js";
+import { getMemory } from "./memory/index.js";
 
 export const SERVER_NAME = "nirog-mcp";
 export const SERVER_VERSION = "0.1.0";
@@ -11,7 +13,7 @@ export const SERVER_VERSION = "0.1.0";
  * One instance is created per HTTP request (stateless transport), so keep
  * construction cheap and keep all state in the backing data layer.
  */
-export function createNirogServer(): McpServer {
+export async function createNirogServer(): Promise<McpServer> {
   const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION });
 
   server.registerTool(
@@ -32,7 +34,10 @@ export function createNirogServer(): McpServer {
     }),
   );
 
-  registerCarePlanTool(server, getDataSource());
+  const data = getDataSource();
+  const { store, embedder } = await getMemory();
+  registerCarePlanTool(server, data);
+  registerIntakeTool(server, { data, store, embedder });
 
   return server;
 }
