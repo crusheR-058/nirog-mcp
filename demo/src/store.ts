@@ -44,6 +44,8 @@ interface DemoState {
   activePatientId: string;
   consultQueueId: string | null;
   callDoctorId: string | null;
+  /** The signed-in doctor on the dedicated page, or null for the embedded demo window. */
+  doctor: { name: string; email: string; specialty: string; picture?: string; registrationNo: string } | null;
 
   setPhase: (p: Phase) => void;
   setLevel: (l: Level) => void;
@@ -64,6 +66,7 @@ interface DemoState {
   startConsult: (queueId: string) => void;
   endConsult: () => void;
   setCallDoctor: (id: string | null) => void;
+  setDoctor: (d: DemoState["doctor"]) => void;
   reset: () => void;
 }
 
@@ -89,6 +92,7 @@ export const useDemo = create<DemoState>((set) => ({
   activePatientId: "pat_rahul",
   consultQueueId: null,
   callDoctorId: null,
+  doctor: null,
 
   setPhase: (phase) => set({ phase }),
   setLevel: (level) => set({ level }),
@@ -123,5 +127,6 @@ export const useDemo = create<DemoState>((set) => ({
     })),
   endConsult: () => set({ consultQueueId: null }),
   setCallDoctor: (callDoctorId) => set({ callDoctorId }),
+  setDoctor: (doctor) => set({ doctor }),
   reset: () => set({ phase: "idle", level: "routine", turns: [], traces: [], complete: false, lastReply: null, consults: 0, alerts: 0, memoryDegraded: false }),
 }));

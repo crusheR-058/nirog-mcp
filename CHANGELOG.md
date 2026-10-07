@@ -75,3 +75,9 @@ hackathon; this MCP server and Agent Skill are new.
   file with a client-side SBAR builder and recurrence rule, doctors directory with a getUserMedia call room,
   and the doctor portal (dashboard, queue, patients, chart, consult form that files encounters, trust log,
   settings). Alexa+ escalations enqueue consults; MCP calls, consults and alerts are audited in the trust log.
+
+## 2026-10-07 (doctor sign-in)
+- Dedicated doctor page at #/doctor: Google Identity Services sign-in verified server-side, one-time doctor
+  verification (registration number + clinic invite code against an allowlist), signed 30-day doctor session,
+  remembered on the device, sign-out. /auth/config, /auth/doctor/session, /auth/doctor/verify routes.
+  Portal window shows the signed-in doctor; verification and sign-in are written to the trust log.

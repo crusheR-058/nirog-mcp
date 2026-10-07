@@ -467,6 +467,37 @@ section { min-height: 100vh; min-height: 100dvh; padding: 120px 0 60px; scroll-m
 .settings-grid .card p { margin: 0; }
 .settings-grid .oncall { margin: 0; }
 
+/* doctor page */
+.doctor-page { position: relative; z-index: 1; min-height: 100vh; }
+.doctor-main { padding: 96px var(--gutter) 40px; max-width: 1500px; margin: 0 auto; }
+.window.full .win-body { min-height: calc(100vh - 200px); }
+.win-brand.link { text-decoration: none; color: inherit; border-radius: 12px; padding: 4px 8px; margin: -4px -8px; transition: background 150ms; }
+.win-brand.link:hover { background: rgba(255, 255, 255, 0.06); }
+.win-brand.link b { display: inline-flex; align-items: center; gap: 6px; }
+.avatar.img { object-fit: cover; }
+.who-pill { display: inline-flex; align-items: center; gap: 10px; padding: 4px 12px 4px 4px; border-radius: 999px; border: 1px solid var(--line-2); font-size: 13px; }
+.who-pill img { width: 30px; height: 30px; border-radius: 50%; }
+.who-pill span { display: grid; line-height: 1.15; }
+.who-pill small { color: var(--ink-3); font-size: 11px; }
+.gate { min-height: 100vh; display: grid; place-items: center; align-content: center; gap: 16px; padding: 110px var(--gutter) 40px; }
+.gate-card { width: min(560px, 100%); padding: 28px 30px; display: grid; gap: 16px; }
+.gate-card h1 { font-family: var(--display); font-weight: 800; font-size: clamp(28px, 3.4vw, 40px); letter-spacing: -0.03em; margin: 0; }
+.gate-card p { margin: 0; }
+.gate-steps { list-style: none; margin: 0 0 6px; padding: 0; display: flex; gap: 8px; flex-wrap: wrap; }
+.gate-steps li { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); padding: 6px 10px; border-radius: 999px; border: 1px solid var(--line); }
+.gate-steps li.is-current { color: #0a1a22; background: #eef3f6; border-color: transparent; }
+.gate-steps li.done { color: var(--teal-2); border-color: rgba(61, 214, 195, 0.4); }
+.gbtn { min-height: 44px; display: grid; justify-content: start; }
+.setup { display: grid; gap: 10px; padding: 14px 16px; border-radius: 14px; border: 1px solid rgba(255, 90, 95, 0.35); background: rgba(255, 90, 95, 0.06); }
+.setup code { font-family: var(--mono); color: var(--gold-2); }
+.demo-form, .verify-form { display: grid; gap: 12px; }
+.demo-form label, .verify-form label { display: grid; gap: 6px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+.demo-form input, .verify-form input { min-height: 46px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--line-2); background: rgba(7, 11, 18, 0.55); color: var(--ink); font: inherit; font-size: 15px; }
+.demo-form input:focus-visible, .verify-form input:focus-visible { outline: 2px solid var(--teal); }
+.gate-actions { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding-top: 6px; }
+.gate-error { color: #ffb3b5; font-size: 14px; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255, 90, 95, 0.4); background: rgba(255, 90, 95, 0.08); }
+.gate-foot { max-width: 560px; text-align: center; }
+
 /* ── Responsive ─────────────────────────────────────────── */
 @media (max-width: 1100px) {
   .bento { grid-template-columns: repeat(2, minmax(0, 1fr)); }

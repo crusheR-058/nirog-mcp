@@ -68,6 +68,16 @@ pnpm build:demo   # builds into dist/demo; the server then serves it at /demo
 
 Phones get a lighter field (fewer particles, no refraction or post-processing) and a bottom rail.
 
+## Doctor sign-in
+
+The dedicated doctor page lives at `/demo/#/doctor` (click the clinic name in the portal window). Two gates:
+Google sign-in through Google Identity Services, verified server-side against Google's tokeninfo endpoint,
+then a one-time verification of the doctor's medical registration number and the clinic invite code against
+the allowlist. The server issues a signed 30-day doctor session; on later visits Google alone opens the portal.
+Set `GOOGLE_CLIENT_ID` (a Web OAuth client with your origin in Authorized JavaScript origins),
+`CLINIC_INVITE_CODE`, and optionally `DOCTOR_ALLOWLIST`. Without a client id on an open dev server, a labelled
+demo account lets you walk the flow.
+
 ## Consent
 
 Every `/mcp` request carries a household consent token (`Authorization: Bearer ...`) scoped to specific

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, CalendarBlank, CaretRight, ChatCircle, CheckCircle, Clock, Eye, FileText, Flask, Gear, Headset, Lock, MagnifyingGlass, Phone, Pill, Plus, ShieldCheck, SquaresFour, Users, VideoCamera, Warning, X } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowSquareOut, CalendarBlank, CaretRight, ChatCircle, CheckCircle, Clock, Eye, FileText, Flask, Gear, Headset, Lock, MagnifyingGlass, Phone, Pill, Plus, ShieldCheck, SquaresFour, Users, VideoCamera, Warning, X } from "@phosphor-icons/react";
 import { ageOf, CHANNEL, CONNECTION, DOCTOR, fmtDate, fmtTime, handoverFor, initials, KIND, minutesSince, PATIENTS, patientById, timeAgo, TRIAGE, type Channel, type QueueItem } from "../clinic/data";
 import { CallRoom } from "../clinic/CallRoom";
 import { useDemo, type PortalTab } from "../store";
@@ -46,11 +46,13 @@ function Dashboard() {
   const sorted = [...queue].sort((a, b) => order[a.state] - order[b.state] || tri[a.triage] - tri[b.triage] || new Date(a.checkedInAt).getTime() - new Date(b.checkedInAt).getTime());
   const hour = new Date().getHours();
   const greet = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const me = useDemo((s) => s.doctor);
+  const surname = (me?.name ?? DOCTOR.name).replace(/^Dr\.?\s*/, "").split(" ").slice(-1)[0];
 
   return (
     <div className="portal-page">
       <div className="portal-greet">
-        <h3>{greet}, Dr. Rao</h3>
+        <h3>{greet}, Dr. {surname}</h3>
         <p className="muted">{waiting.length} patient{waiting.length === 1 ? "" : "s"} waiting{emergencies ? ` · ${emergencies} emergency` : ""}.</p>
       </div>
       <div className="stats">
@@ -366,21 +368,22 @@ function Settings() {
 }
 
 /* ── The window ───────────────────────────────────────────────────────────── */
-export function Portal() {
+export function PortalWindow({ full = false }: { full?: boolean }) {
   const tab = useDemo((s) => s.portalTab);
   const setTab = useDemo((s) => s.setPortalTab);
+  const me = useDemo((s) => s.doctor);
   const date = useMemo(() => new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }), []);
+  const name = me?.name ?? DOCTOR.name;
+  const spec = me?.specialty ?? DOCTOR.specialty;
   return (
-    <section className="portal" id="portal" aria-label="Doctor portal">
-      <header className="section-head">
-        <p className="eyebrow">Doctor portal · the other chair</p>
-        <h2>The same consultation, from the clinician's side.</h2>
-        <p className="lede">Consults escalated by Alexa+ land in this queue. Every tool call the agent made is already in the trust log.</p>
-      </header>
-      <div className="glass window">
+      <div className={`glass window ${full ? "full" : ""}`}>
         <div className="win-top">
-          <div className="win-brand"><span className="mark small">N</span><div><b>{DOCTOR.clinic}</b><small>{date} · {DOCTOR.specialty}</small></div></div>
-          <div className="win-user"><span className="avatar blue">DA</span><b>{DOCTOR.name}</b></div>
+          {full ? (
+            <div className="win-brand"><span className="mark small">N</span><div><b>{DOCTOR.clinic}</b><small>{date} · {spec}</small></div></div>
+          ) : (
+            <a className="win-brand link" href="#/doctor" title="Open the dedicated doctor page (Google sign-in)"><span className="mark small">N</span><div><b>{DOCTOR.clinic} <ArrowSquareOut size={12} weight="bold" /></b><small>{date} · {spec} · click to sign in</small></div></a>
+          )}
+          <div className="win-user">{me?.picture ? <img className="avatar img" src={me.picture} alt="" /> : <span className="avatar blue">{name.split(" ").map((w) => w[0]).slice(1, 3).join("") || "DR"}</span>}<b>{name}</b></div>
         </div>
         <div className="win-body">
           <nav className="win-nav" aria-label="Portal">
@@ -396,6 +399,18 @@ export function Portal() {
           </div>
         </div>
       </div>
+  );
+}
+
+export function Portal() {
+  return (
+    <section className="portal" id="portal" aria-label="Doctor portal">
+      <header className="section-head">
+        <p className="eyebrow">Doctor portal · the other chair</p>
+        <h2>The same consultation, from the clinician's side.</h2>
+        <p className="lede">Consults escalated by Alexa+ land in this queue. Every tool call the agent made is already in the trust log. Click the clinic name to open the dedicated doctor page with Google sign-in.</p>
+      </header>
+      <PortalWindow />
     </section>
   );
 }

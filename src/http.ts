@@ -8,6 +8,7 @@ import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middlew
 import { createNirogServer, SERVER_NAME, SERVER_VERSION } from "./server.js";
 import { consentVerifier } from "./auth/tokens.js";
 import { scopeFromAuth } from "./auth/consent.js";
+import { authRoutes } from "./auth/routes.js";
 
 const PORT = Number(process.env.PORT ?? 3333);
 const HOST = process.env.HOST ?? "127.0.0.1";
@@ -41,7 +42,10 @@ async function handleMcp(req: Request, res: Response) {
   await transport.handleRequest(req, res, req.body);
 }
 
-// The scroll-world demo, built by `pnpm build:demo` into dist/demo. Static, same-origin with /mcp.
+// Doctor sign-in for the portal page: Google, then one-time verification.
+app.use("/auth", authRoutes());
+
+// The demo, built by `pnpm build:demo` into dist/demo. Static, same-origin with /mcp.
 const demoDir = join(dirname(fileURLToPath(import.meta.url)), "..", "dist", "demo");
 if (existsSync(demoDir)) {
   app.use("/demo", express.static(demoDir, { index: "index.html", maxAge: "1h" }));

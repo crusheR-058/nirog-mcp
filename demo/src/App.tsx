@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Brain, ChatCircleDots, FolderOpen, GithubLogo, Monitor, Path, Siren, SquaresFour, Stethoscope, UsersThree, Waveform } from "@phosphor-icons/react";
 import { SECTIONS } from "./copy";
 import { CaseFile } from "./sections/CaseFile";
@@ -16,6 +16,17 @@ import { useConversation } from "./voice/useConversation";
 import { VoiceBar } from "./voice/VoiceBar";
 
 const Background = lazy(() => import("./bg/Background").then((m) => ({ default: m.Background })));
+const DoctorPage = lazy(() => import("./doctor/DoctorPage").then((m) => ({ default: m.DoctorPage })));
+
+const useHashRoute = () => {
+  const [hash, setHash] = useState(location.hash);
+  useEffect(() => {
+    const on = () => setHash(location.hash);
+    window.addEventListener("hashchange", on);
+    return () => window.removeEventListener("hashchange", on);
+  }, []);
+  return hash;
+};
 
 const ICONS = [Waveform, Path, SquaresFour, Brain, FolderOpen, UsersThree, Stethoscope, Siren, Monitor, ChatCircleDots];
 
@@ -36,6 +47,19 @@ const go = (i: number) => document.getElementById(SECTIONS[i].id)?.scrollIntoVie
 const goTo = (id: (typeof SECTIONS)[number]["id"]) => go(SECTIONS.findIndex((s) => s.id === id));
 
 export default function App() {
+  const hash = useHashRoute();
+  if (hash.startsWith("#/doctor")) {
+    return (
+      <div className="app">
+        <Suspense fallback={<div className="bg" aria-hidden="true" />}><Background /></Suspense>
+        <Suspense fallback={null}><DoctorPage onBack={() => { location.hash = ""; }} /></Suspense>
+      </div>
+    );
+  }
+  return <Deck3 />;
+}
+
+function Deck3() {
   const convo = useConversation();
   const section = useDemo((s) => s.section);
   const setSection = useDemo((s) => s.setSection);
