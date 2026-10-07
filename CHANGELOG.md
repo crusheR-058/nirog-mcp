@@ -27,3 +27,5 @@ hackathon; this MCP server and Agent Skill are new.
   runs unchanged on Supabase pgvector and CockroachDB.
 - `start_intake` tool. Rahul's demo line "the ache is back again" recalls the July complaint at distance 0.292,
   inherits the lower-back region, and raises the recurrent flag, matching the figures in the Nirog README.
+- Chose Supabase pgvector for live memory. Added `pnpm db:migrate` (creates tables, seeds the demo history,
+  idempotent) and `pnpm verify` (connectivity plus a live recall check).

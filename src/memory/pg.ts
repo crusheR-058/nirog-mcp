@@ -101,10 +101,10 @@ export class PgStore implements MemoryStore {
 
   async search(opts: { patientId: string; embedding: number[]; limit: number; threshold: number; before?: Date }): Promise<RecallMatch[]> {
     const res = await this.pool.query<Row>(
-      `SELECT id, visit_id, patient_id, raw_text, body_region, occurred_at, embedding <=> $2 AS distance
+      `SELECT id, visit_id, patient_id, raw_text, body_region, occurred_at, embedding <=> $2::vector AS distance
          FROM complaint
         WHERE patient_id = $1 AND ($3::timestamptz IS NULL OR occurred_at < $3::timestamptz)
-        ORDER BY embedding <=> $2
+        ORDER BY embedding <=> $2::vector
         LIMIT $4`,
       [opts.patientId, `[${opts.embedding.join(",")}]`, opts.before ?? null, opts.limit],
     );
