@@ -83,6 +83,8 @@ q { quotes: "\201C" "\201D"; }
 .topbar-right { display: flex; align-items: center; gap: 10px; }
 .clock { display: grid; text-align: right; font-family: var(--display); font-weight: 700; font-size: 15px; line-height: 1.1; padding-right: 6px; }
 .clock small { font-family: var(--body); font-weight: 400; font-size: 11px; color: var(--ink-3); }
+.btn.doctor-cta { min-height: 38px; padding: 0 14px; text-decoration: none; background: #eef3f6; color: #0a1a22; border-color: transparent; font-size: 13px; box-shadow: 0 0 20px rgba(255, 255, 255, 0.12); }
+.btn.doctor-cta:hover { background: #fff; }
 .icon-btn { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; border: 1px solid var(--line-2); color: var(--ink-2); background: rgba(255, 255, 255, 0.04); }
 .icon-btn:hover { color: var(--ink); border-color: var(--teal); }
 
@@ -516,6 +518,8 @@ section { min-height: 100vh; min-height: 100dvh; padding: 120px 0 60px; scroll-m
   .rail .tip { display: none; }
   .topbar { top: 12px; padding: 8px 10px; }
   .clock { display: none; }
+  .btn.doctor-cta { padding: 0 10px; }
+  .btn.doctor-cta span { display: none; }
   .brand small { display: none; }
   .page { padding-bottom: 200px; }
   section { padding: 96px 0 40px; }

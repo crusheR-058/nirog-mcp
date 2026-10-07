@@ -95,6 +95,7 @@ function Deck3() {
         </div>
         <div className="topbar-right">
           <span className="clock"><Clock /><small>Sultanpur, UP</small></span>
+          <a className="btn doctor-cta" href="#/doctor"><Stethoscope size={16} weight="bold" /> I'm a Doctor</a>
           <a className="icon-btn" href="https://github.com/crusheR-058/nirog-mcp" target="_blank" rel="noreferrer" aria-label="nirog-mcp on GitHub"><GithubLogo size={18} weight="bold" /></a>
         </div>
       </header>
