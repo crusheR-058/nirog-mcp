@@ -63,3 +63,9 @@ hackathon; this MCP server and Agent Skill are new.
   "Behind the voice" trace of every tool call. The 3D voice ring breathes with the conversation and turns red
   on an emergency.
 - Server serves the built page at /demo; Dockerfile builds it.
+
+## 2026-10-07 (demo redesign)
+- Replaced the camera-flight demo with a liquid-glass deck after reviewing the reference folder: fixed 3D
+  field (refractive crystals, particle sphere reacting to pointer and conversation phase, wireframe shards),
+  glass bento tiles with live tallies, an SVG memory graph with real distances, handover and red-flag
+  sections, a persistent voice bar with suggestion chips, left icon rail, Phosphor icons, Manrope/Inter type.

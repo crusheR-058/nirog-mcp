@@ -1,103 +1,99 @@
-import { lazy, memo, Suspense, useCallback, useEffect } from "react";
-import { BEATS } from "./copy";
-import { Demo } from "./Demo";
+import { lazy, Suspense, useEffect, useRef } from "react";
+import { Brain, ChatCircleDots, GithubLogo, Siren, SquaresFour, Stethoscope, Waveform } from "@phosphor-icons/react";
+import { SECTIONS } from "./copy";
+import { Deck } from "./sections/Deck";
+import { Handover } from "./sections/Handover";
+import { Hero } from "./sections/Hero";
+import { MemoryGraph } from "./sections/MemoryGraph";
+import { RedFlag } from "./sections/RedFlag";
+import { Talk } from "./sections/Talk";
 import { useDemo } from "./store";
+import { useConversation } from "./voice/useConversation";
+import { VoiceBar } from "./voice/VoiceBar";
 
-const World = lazy(() => import("./world/World").then((m) => ({ default: m.World })));
+const Background = lazy(() => import("./bg/Background").then((m) => ({ default: m.Background })));
 
-function Logo() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <circle cx="12" cy="12" r="9" stroke="#35c1e8" strokeWidth="2" />
-      <circle cx="12" cy="12" r="3" fill="#e0a526" />
-    </svg>
-  );
+const ICONS = [Waveform, SquaresFour, Brain, Stethoscope, Siren, ChatCircleDots];
+
+function Clock() {
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const tick = () => {
+      if (ref.current) ref.current.textContent = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+    };
+    tick();
+    const t = setInterval(tick, 15000);
+    return () => clearInterval(t);
+  }, []);
+  return <span ref={ref} />;
 }
-
-/** Patient quotes in the copy are set in turmeric, like the patient's words everywhere else. */
-function Quoted({ text }: { text: string }) {
-  const parts = text.split(/("[^"]+")/g);
-  return <>{parts.map((p, i) => (p.startsWith('"') ? <q key={i}>{p.slice(1, -1)}</q> : p))}</>;
-}
-
-function Beats() {
-  const current = useDemo((s) => s.current);
-  return (
-    <>
-      {BEATS.slice(0, -1).map((b, i) => (
-        <section key={b.id} className={`beat ${i % 2 === 1 ? "right" : ""}`} id={b.id} aria-hidden={current !== i}>
-          <div className="card">
-            <p className="eyebrow">{b.eyebrow}</p>
-            <h2>{b.title}</h2>
-            <p><Quoted text={b.body} /></p>
-            {b.tags && <ul className="tags">{b.tags.map((t) => <li key={t}>{t}</li>)}</ul>}
-          </div>
-        </section>
-      ))}
-      <div id="try-it">
-        <Demo active={current === BEATS.length - 1} />
-      </div>
-    </>
-  );
-}
-
-/** Rendered once; its props never change, so React never re-renders the canvas tree from outside. */
-const Flight = memo(function Flight() {
-  return (
-    <Suspense fallback={null}>
-      <World pages={BEATS.length} html={<Beats />} />
-    </Suspense>
-  );
-});
 
 export default function App() {
-  const current = useDemo((s) => s.current);
-  const atStart = useDemo((s) => s.atStart);
-  const scrollEl = useDemo((s) => s.scrollEl);
+  const convo = useConversation();
+  const section = useDemo((s) => s.section);
+  const setSection = useDemo((s) => s.setSection);
+  const level = useDemo((s) => s.level);
 
-  const scrollTo = useCallback(
-    (i: number) => {
-      if (!scrollEl) return;
-      const top = (scrollEl.scrollHeight - scrollEl.clientHeight) * (i / (BEATS.length - 1));
-      scrollEl.scrollTo({ top, behavior: "smooth" });
-    },
-    [scrollEl],
-  );
-
+  // Which section is in view drives the rail and the 3D field.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement | null)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-      if (e.key === "ArrowRight" || e.key === "PageDown") scrollTo(Math.min(current + 1, BEATS.length - 1));
-      if (e.key === "ArrowLeft" || e.key === "PageUp") scrollTo(Math.max(current - 1, 0));
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [current, scrollTo]);
+    const els = SECTIONS.map((s) => document.getElementById(s.id)).filter((el): el is HTMLElement => Boolean(el));
+    const io = new IntersectionObserver(
+      (entries) => {
+        const best = entries.filter((e) => e.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (best) setSection(els.indexOf(best.target as HTMLElement));
+      },
+      { threshold: [0.35, 0.6] },
+    );
+    els.forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, [setSection]);
+
+  const go = (i: number) => document.getElementById(SECTIONS[i].id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   return (
-    <>
-      <a className="skip" href="#try-it" onClick={(e) => { e.preventDefault(); scrollTo(BEATS.length - 1); }}>Skip to the live demo</a>
-      <header className="topbar">
-        <div className="brand"><Logo />Nirog for Alexa+</div>
-        <a className="status" href="https://github.com/crusheR-058/nirog-mcp" target="_blank" rel="noreferrer">
-          <span className="dot" style={{ background: "#35c1e8" }} /><span className="text">nirog-mcp on GitHub</span>
-        </a>
+    <div className={`app level-${level}`}>
+      <a className="skip" href="#talk">Skip to the live demo</a>
+      <Suspense fallback={<div className="bg" aria-hidden="true" />}>
+        <Background />
+      </Suspense>
+
+      <header className="topbar glass">
+        <div className="brand">
+          <span className="mark"><Waveform size={16} weight="bold" /></span>
+          <div><b>Nirog</b><small>for Alexa+ · Good evening, Rahul</small></div>
+        </div>
+        <div className="topbar-right">
+          <span className="clock"><Clock /><small>Sultanpur, UP</small></span>
+          <a className="icon-btn" href="https://github.com/crusheR-058/nirog-mcp" target="_blank" rel="noreferrer" aria-label="nirog-mcp on GitHub"><GithubLogo size={18} weight="bold" /></a>
+        </div>
       </header>
 
-      <nav className="rail" aria-label="Scenes">
-        {BEATS.map((b, i) => (
-          <button key={b.id} onClick={() => scrollTo(i)} aria-current={i === current}>
-            <span>{b.label}</span>
-          </button>
-        ))}
+      <nav className="rail glass" aria-label="Sections">
+        {SECTIONS.map((s, i) => {
+          const Icon = ICONS[i];
+          return (
+            <button key={s.id} onClick={() => go(i)} aria-current={i === section} aria-label={s.label} title={s.label}>
+              <Icon size={20} weight={i === section ? "fill" : "regular"} />
+              <span className="tip">{s.label}</span>
+            </button>
+          );
+        })}
       </nav>
 
-      <div className="hint" style={{ opacity: atStart ? 1 : 0 }} aria-hidden="true">
-        <span className="line" />Scroll to fly
-      </div>
+      <main className="page">
+        <Hero onNext={() => go(1)} />
+        <Deck />
+        <MemoryGraph />
+        <Handover />
+        <RedFlag />
+        <Talk convo={convo} />
+        <footer className="foot">
+          <span>Built for the Build, Ship, Shape: Amazon Developer Hackathon · Alexa+ track</span>
+          <span>MCP · Streamable HTTP · Amazon Bedrock · pgvector</span>
+        </footer>
+      </main>
 
-      <Flight />
-    </>
+      <VoiceBar convo={convo} />
+    </div>
   );
 }

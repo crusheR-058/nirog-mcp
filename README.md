@@ -41,11 +41,16 @@ The lexicon, region inheritance, and recurrence rule are ported from the Nirog r
 (https://github.com/Shivang-creator/nirog, MIT). The one claim the system makes about a patient, the recurrence
 flag, is arithmetic a doctor can check by hand. No model decides it.
 
-## The scroll world (simulated Alexa+ experience)
+## The deck (simulated Alexa+ experience)
 
-`demo/` is a Vite + React + Three.js page: scrolling flies a camera through five scenes (a village home at night,
-the memory field, the doctor's desk, the red flag, and a live ring you can talk to). The last scene is a working
-client of this server over Streamable HTTP, with browser speech in and out and a trace of every tool call.
+`demo/` is a Vite + React page in the style of a liquid-glass control deck: a persistent Three.js field of
+refractive crystals, drifting wireframe shards and a particle sphere that breathes with the conversation, with
+frosted glass sections over it. Sections: Voice (hero), Deck (live tiles), Memory (an SVG node graph of
+Rahul's complaints joined by golden rays with real cosine distances), Handover (the on-call queue card and a
+presentations chart), Red flag (the escalation flow), and Talk (conversation plus a trace of every tool call).
+
+A glass voice bar follows the page. Everything it says is a tool result from this server over Streamable HTTP;
+browser speech handles input and output, and the sphere turns red on an emergency.
 
 ```bash
 pnpm dev          # MCP server on :3333
@@ -53,7 +58,7 @@ pnpm dev:demo     # Vite on :5173, proxies /mcp to the server
 pnpm build:demo   # builds into dist/demo; the server then serves it at /demo
 ```
 
-Phones get the same flight with lighter geometry and no bloom; `prefers-reduced-motion` disables damping.
+Phones get a lighter field (fewer particles, no refraction or post-processing) and a bottom rail.
 
 ## Consent
 
