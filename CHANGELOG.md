@@ -44,3 +44,13 @@ hackathon; this MCP server and Agent Skill are new.
   alerts the family contact (audit row; SMS stub). `start_intake` now runs triage on every complaint and
   an emergency overrides the spoken line.
 - Data contract gained `requestConsult` and `alertCaregiver` for mock and Supabase.
+
+## 2026-10-12 (Day 6, done 7 Oct)
+- Household consent tokens (HMAC, patient-scoped) verified by the MCP SDK's bearer middleware; every tool
+  checks the caller's scope. `pnpm consent-token` mints them. Unauthenticated requests get 401.
+- Agent Skill at skills/nirog/SKILL.md.
+
+## 2026-10-13 (Day 7, in progress)
+- Dockerfile (multi-stage, 68 MB compressed), image pushed to ECR in ap-south-1.
+- deploy/iam.sh (two roles) and deploy/apprunner.sh (build, push, create/update, wait, health check).
+  IAM role creation needs an admin to run iam.sh.

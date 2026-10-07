@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { triage, type TriageLevel } from "../clinical/triage.js";
 import type { NirogData } from "../data/types.js";
+import { consentDenial, type ConsentScope } from "../auth/consent.js";
 
 export interface RedFlagResult {
   patient: { id: string; name: string };
@@ -58,7 +59,7 @@ export async function runRedFlag(
   };
 }
 
-export function registerRedFlagTool(server: McpServer, data: NirogData, now: () => Date = () => new Date()) {
+export function registerRedFlagTool(server: McpServer, data: NirogData, scope: ConsentScope = { kind: "all" }, now: () => Date = () => new Date()) {
   server.registerTool(
     "report_red_flag",
     {
@@ -76,6 +77,8 @@ export function registerRedFlagTool(server: McpServer, data: NirogData, now: () 
       },
     },
     async ({ patient_id, symptoms, model_red_flag }) => {
+      const denied = consentDenial(scope, patient_id);
+      if (denied) return { isError: true, content: [{ type: "text", text: denied }] };
       const result = await runRedFlag(data, { patientId: patient_id, symptoms, modelRedFlag: model_red_flag, now: now() });
       if ("error" in result) return { isError: true, content: [{ type: "text", text: result.error }] };
       return { content: [{ type: "text", text: JSON.stringify(result) }] };

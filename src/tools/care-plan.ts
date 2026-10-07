@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { EncounterRecord, NirogData, PatientRecord, PrescribedItem } from "../data/types.js";
+import { consentDenial, type ConsentScope } from "../auth/consent.js";
 
 const DAY_MS = 86_400_000;
 
@@ -110,7 +111,7 @@ export function buildCarePlan(patient: PatientRecord, encounter: EncounterRecord
   };
 }
 
-export function registerCarePlanTool(server: McpServer, data: NirogData, now: () => Date = () => new Date()) {
+export function registerCarePlanTool(server: McpServer, data: NirogData, scope: ConsentScope = { kind: "all" }, now: () => Date = () => new Date()) {
   server.registerTool(
     "get_care_plan",
     {
@@ -122,6 +123,8 @@ export function registerCarePlanTool(server: McpServer, data: NirogData, now: ()
       inputSchema: { patient_id: z.string().describe("Nirog patient id, e.g. pat_rahul") },
     },
     async ({ patient_id }) => {
+      const denied = consentDenial(scope, patient_id);
+      if (denied) return { isError: true, content: [{ type: "text", text: denied }] };
       const patient = await data.getPatient(patient_id);
       if (!patient) {
         return { isError: true, content: [{ type: "text", text: `No patient with id ${patient_id}.` }] };

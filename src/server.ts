@@ -5,6 +5,7 @@ import { registerCarePlanTool } from "./tools/care-plan.js";
 import { registerIntakeTool } from "./tools/intake.js";
 import { registerRedFlagTool } from "./tools/red-flag.js";
 import { getMemory } from "./memory/index.js";
+import type { ConsentScope } from "./auth/consent.js";
 
 export const SERVER_NAME = "nirog-mcp";
 export const SERVER_VERSION = "0.1.0";
@@ -14,7 +15,7 @@ export const SERVER_VERSION = "0.1.0";
  * One instance is created per HTTP request (stateless transport), so keep
  * construction cheap and keep all state in the backing data layer.
  */
-export async function createNirogServer(): Promise<McpServer> {
+export async function createNirogServer(scope: ConsentScope = { kind: "all" }): Promise<McpServer> {
   const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION });
 
   server.registerTool(
@@ -37,9 +38,9 @@ export async function createNirogServer(): Promise<McpServer> {
 
   const data = getDataSource();
   const { store, embedder } = await getMemory();
-  registerCarePlanTool(server, data);
-  registerIntakeTool(server, { data, store, embedder });
-  registerRedFlagTool(server, data);
+  registerCarePlanTool(server, data, scope);
+  registerIntakeTool(server, { data, store, embedder, scope });
+  registerRedFlagTool(server, data, scope);
 
   return server;
 }

@@ -8,6 +8,7 @@ import { REGION_LABELS } from "../clinical/regions.js";
 import { nextQuestion, type AriaResult } from "../ai/aria.js";
 import type { ConverseFn, ConverseTurn } from "../ai/converse.js";
 import { triage, type TriageLevel } from "../clinical/triage.js";
+import { consentDenial, type ConsentScope } from "../auth/consent.js";
 
 export interface IntakeResult {
   patient: { id: string; name: string };
@@ -85,9 +86,10 @@ export async function runIntake(
 
 export function registerIntakeTool(
   server: McpServer,
-  deps: { data: NirogData; store: MemoryStore; embedder: Embedder; converse?: ConverseFn | null },
+  deps: { data: NirogData; store: MemoryStore; embedder: Embedder; converse?: ConverseFn | null; scope?: ConsentScope },
   now: () => Date = () => new Date(),
 ) {
+  const scope = deps.scope ?? { kind: "all" as const };
   server.registerTool(
     "start_intake",
     {
@@ -110,6 +112,8 @@ export function registerIntakeTool(
       },
     },
     async ({ patient_id, complaint, transcript }) => {
+      const denied = consentDenial(scope, patient_id);
+      if (denied) return { isError: true, content: [{ type: "text", text: denied }] };
       const result = await runIntake(deps, { patientId: patient_id, complaint, transcript, now: now() });
       if ("error" in result) return { isError: true, content: [{ type: "text", text: result.error }] };
       return { content: [{ type: "text", text: JSON.stringify(result) }] };

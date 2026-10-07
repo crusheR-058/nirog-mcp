@@ -10,7 +10,8 @@
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "db:migrate": "tsx --env-file-if-exists=.env scripts/migrate.ts",
-    "verify": "tsx --env-file-if-exists=.env scripts/verify.ts"
+    "verify": "tsx --env-file-if-exists=.env scripts/verify.ts",
+    "consent-token": "tsx --env-file-if-exists=.env scripts/token.ts"
   },
   "keywords": [],
   "author": "",

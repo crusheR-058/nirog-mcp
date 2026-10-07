@@ -41,6 +41,25 @@ The lexicon, region inheritance, and recurrence rule are ported from the Nirog r
 (https://github.com/Shivang-creator/nirog, MIT). The one claim the system makes about a patient, the recurrence
 flag, is arithmetic a doctor can check by hand. No model decides it.
 
+## Consent
+
+Every `/mcp` request carries a household consent token (`Authorization: Bearer ...`) scoped to specific
+patients. Tools refuse any other patient id without revealing whether it exists. Mint a token with
+`pnpm consent-token pat_rahul,pat_aarav --sub yadav-household --days 30` using the same `NIROG_TOKEN_SECRET`
+the server runs with. Without the secret the server is open, for local development only.
+
+## Agent Skill
+
+`skills/nirog/SKILL.md` follows the open Agent Skills format and tells an agent how to run an intake with these
+tools: identify the patient, call `start_intake` each turn, escalate on red flags, and never diagnose.
+
+## Deploy (AWS App Runner, Mumbai)
+
+```bash
+bash deploy/iam.sh        # once, as an admin: two IAM roles (ECR pull, Bedrock invoke)
+bash deploy/apprunner.sh  # build, push to ECR, create or update the service, print the HTTPS endpoint
+```
+
 ## Tools
 
 | Tool | Status |
