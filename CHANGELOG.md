@@ -54,3 +54,12 @@ hackathon; this MCP server and Agent Skill are new.
 - Dockerfile (multi-stage, 68 MB compressed), image pushed to ECR in ap-south-1.
 - deploy/iam.sh (two roles) and deploy/apprunner.sh (build, push, create/update, wait, health check).
   IAM role creation needs an admin to run iam.sh.
+
+## 2026-10-15 to 17 (Days 9 to 11, done 7 Oct)
+- Simulated Alexa+ experience as a Three.js scroll world (demo/): five scenes on a camera path with dwell,
+  pinned copy per scene, a route rail, keyboard navigation, scene gating, bloom on desktop, reduced 3D on phones.
+- Live last scene: browser speech in and out, the MCP SDK client over Streamable HTTP, consent token and patient
+  selection, intent routing to the three tools, automatic escalation when triage is not routine, and a
+  "Behind the voice" trace of every tool call. The 3D voice ring breathes with the conversation and turns red
+  on an emergency.
+- Server serves the built page at /demo; Dockerfile builds it.

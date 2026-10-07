@@ -1,6 +1,9 @@
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import type { Request, Response } from "express";
+import express, { type Request, type Response } from "express";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js";
 import { createNirogServer, SERVER_NAME, SERVER_VERSION } from "./server.js";
 import { consentVerifier } from "./auth/tokens.js";
@@ -36,6 +39,13 @@ async function handleMcp(req: Request, res: Response) {
   });
   await server.connect(transport);
   await transport.handleRequest(req, res, req.body);
+}
+
+// The scroll-world demo, built by `pnpm build:demo` into dist/demo. Static, same-origin with /mcp.
+const demoDir = join(dirname(fileURLToPath(import.meta.url)), "..", "dist", "demo");
+if (existsSync(demoDir)) {
+  app.use("/demo", express.static(demoDir, { index: "index.html", maxAge: "1h" }));
+  app.get("/", (_req: Request, res: Response) => res.redirect("/demo/"));
 }
 
 app.post("/mcp", handleMcp);

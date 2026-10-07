@@ -5,3 +5,4 @@ dist
 .git
 *.md
 scripts
+demo/node_modules

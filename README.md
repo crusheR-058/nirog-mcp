@@ -41,6 +41,20 @@ The lexicon, region inheritance, and recurrence rule are ported from the Nirog r
 (https://github.com/Shivang-creator/nirog, MIT). The one claim the system makes about a patient, the recurrence
 flag, is arithmetic a doctor can check by hand. No model decides it.
 
+## The scroll world (simulated Alexa+ experience)
+
+`demo/` is a Vite + React + Three.js page: scrolling flies a camera through five scenes (a village home at night,
+the memory field, the doctor's desk, the red flag, and a live ring you can talk to). The last scene is a working
+client of this server over Streamable HTTP, with browser speech in and out and a trace of every tool call.
+
+```bash
+pnpm dev          # MCP server on :3333
+pnpm dev:demo     # Vite on :5173, proxies /mcp to the server
+pnpm build:demo   # builds into dist/demo; the server then serves it at /demo
+```
+
+Phones get the same flight with lighter geometry and no bloom; `prefers-reduced-motion` disables damping.
+
 ## Consent
 
 Every `/mcp` request carries a household consent token (`Authorization: Bearer ...`) scoped to specific
