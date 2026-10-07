@@ -238,7 +238,7 @@ export function Background() {
     <div className="bg" aria-hidden="true">
       <Canvas
         dpr={low ? [1, 1.25] : [1, 1.75]}
-        camera={{ fov: 45, position: [0, 0, 7.5], near: 0.1, far: 60 }}
+        camera={{ fov: 45, position: [-3.1, 0, 7.5], near: 0.1, far: 60 }}
         gl={{ antialias: !low, powerPreference: "high-performance", preserveDrawingBuffer: true, alpha: false }}
         onCreated={({ gl, scene }) => {
           gl.toneMapping = THREE.ACESFilmicToneMapping;
