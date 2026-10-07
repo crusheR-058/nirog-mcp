@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { callTool, loadSettings, saveSettings, type Settings } from "../mcp";
 import { canListen, listenOnce, speak, stopSpeaking } from "../speech";
 import { useDemo, type Level } from "../store";
+import { patientById } from "../clinic/data";
 
 const CARE_PLAN = /\b(medicine|medicines|tablet|tablets|dawai|dose|pills?|tests?|follow[- ]?up|next visit|doctor next|what do i take)\b/i;
 const SYMPTOM = /pain|ache|hurt|fever|cough|dizzy|bleed|breath|vomit|sweat/i;
@@ -39,7 +40,7 @@ export function useConversation() {
   const [settings, setSettings] = useState<Settings>(loadSettings);
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
   const [health, setHealth] = useState<"unknown" | "ok" | "bad">("unknown");
-  const { phase, turns, setPhase, setLevel, addTurn, addTrace, finishTrace, setComplete, bump } = useDemo();
+  const { phase, turns, setPhase, setLevel, addTurn, addTrace, finishTrace, setComplete, bump, addAudit, addQueue, setMemoryDegraded } = useDemo();
 
   useEffect(() => saveSettings(settings), [settings]);
   useEffect(() => {
@@ -74,6 +75,8 @@ export function useConversation() {
       const id = addTrace({ tool, args });
       const r = await callTool(settings, tool, args);
       finishTrace(id, { ms: r.ms, error: r.error, summary: summarize(tool, r.result) });
+      const who = patientById(settings.patientId)?.fullName ?? settings.patientId;
+      addAudit({ actorName: "Alexa+ (nirog-mcp)", action: r.error ? `Refused ${tool}` : `Called ${tool}`, target: who, reason: r.error ? r.error.slice(0, 80) : tool === "get_care_plan" ? "Patient asked about medicines" : "Patient described a symptom" });
       if (r.error) {
         setPhase("idle");
         setNotice({ text: r.error, error: true });
@@ -84,6 +87,8 @@ export function useConversation() {
       const aria = res.aria as { complete?: boolean; redFlag?: boolean } | undefined;
       const level = triage?.level ?? "routine";
       setLevel(level);
+      const mem = res.memory as { degraded?: boolean } | undefined;
+      if (mem) setMemoryDegraded(Boolean(mem.degraded));
       if (level !== "emergency") await say(String(res.spoken ?? ""), level);
 
       if (tool === "start_intake" && (level !== "routine" || aria?.redFlag)) {
@@ -95,14 +100,21 @@ export function useConversation() {
         if (!rr.error) {
           const rf = rr.result as { level: Level; spoken: string; consultId: string | null; actions: Array<{ type: string }> };
           setLevel(rf.level);
-          if (rf.consultId) bump("consults");
-          if (rf.actions.some((a) => a.type === "caregiver_alerted")) bump("alerts");
+          if (rf.consultId) {
+            bump("consults");
+            addQueue({ id: rf.consultId, patientId: settings.patientId, kind: rf.level === "emergency" ? "emergency" : "new", triage: rf.level, state: "waiting", checkedInAt: new Date().toISOString(), scheduledFor: new Date().toISOString(), channel: "audio", reason: `Alexa+: "${text.slice(0, 60)}"`, quality: "fair", redFlagCount: 1, source: "alexa" });
+            addAudit({ actorName: "Alexa+ (nirog-mcp)", action: "Queued consult", target: who, reason: `${rf.level} · rules-based triage` });
+          }
+          if (rf.actions.some((a) => a.type === "caregiver_alerted")) {
+            bump("alerts");
+            addAudit({ actorName: "Alexa+ (nirog-mcp)", action: "Alerted family contact", target: who, reason: "Red flag escalation" });
+          }
           await say(rf.spoken, rf.level);
         } else setPhase("idle");
       }
       if (aria?.complete) setComplete(true);
     },
-    [phase, turns, settings, addTurn, addTrace, finishTrace, say, setLevel, setPhase, setComplete, bump],
+    [phase, turns, settings, addTurn, addTrace, finishTrace, say, setLevel, setPhase, setComplete, bump, addAudit, addQueue, setMemoryDegraded],
   );
 
   const talk = useCallback(async () => {

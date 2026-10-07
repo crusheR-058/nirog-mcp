@@ -8,10 +8,14 @@ export const MEMORY_CARDS = [
 
 export const SECTIONS = [
   { id: "hero", label: "Voice" },
+  { id: "journey", label: "Care loop" },
   { id: "deck", label: "Deck" },
   { id: "memory", label: "Memory" },
+  { id: "case", label: "Case file" },
+  { id: "doctors", label: "Doctors" },
   { id: "handover", label: "Handover" },
   { id: "redflag", label: "Red flag" },
+  { id: "portal", label: "Portal" },
   { id: "talk", label: "Talk" },
 ] as const;
 

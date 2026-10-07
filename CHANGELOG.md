@@ -69,3 +69,9 @@ hackathon; this MCP server and Agent Skill are new.
   field (refractive crystals, particle sphere reacting to pointer and conversation phase, wireframe shards),
   glass bento tiles with live tallies, an SVG memory graph with real distances, handover and red-flag
   sections, a persistent voice bar with suggestion chips, left icon rail, Phosphor icons, Manrope/Inter type.
+
+## 2026-10-07 (clinic features)
+- Ported every surface of nirog-memory.vercel.app into the deck: care loop and trust principles, patient case
+  file with a client-side SBAR builder and recurrence rule, doctors directory with a getUserMedia call room,
+  and the doctor portal (dashboard, queue, patients, chart, consult form that files encounters, trust log,
+  settings). Alexa+ escalations enqueue consults; MCP calls, consults and alerts are audited in the trust log.

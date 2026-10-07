@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Microphone, PaperPlaneRight, Waveform } from "@phosphor-icons/react";
-import { SUGGESTIONS } from "../copy";
+import { SECTIONS, SUGGESTIONS } from "../copy";
 import { useDemo } from "../store";
 import type { useConversation } from "./useConversation";
 
@@ -23,7 +23,7 @@ export function VoiceBar({ convo }: { convo: Convo }) {
     return () => clearTimeout(t);
   }, [lastReply]);
 
-  const replyVisible = show && lastReply && section !== 5;
+  const replyVisible = show && lastReply && section !== SECTIONS.length - 1;
 
   return (
     <div className="voicebar-wrap">

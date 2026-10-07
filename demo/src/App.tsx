@@ -1,10 +1,14 @@
 import { lazy, Suspense, useEffect, useRef } from "react";
-import { Brain, ChatCircleDots, GithubLogo, Siren, SquaresFour, Stethoscope, Waveform } from "@phosphor-icons/react";
+import { Brain, ChatCircleDots, FolderOpen, GithubLogo, Monitor, Path, Siren, SquaresFour, Stethoscope, UsersThree, Waveform } from "@phosphor-icons/react";
 import { SECTIONS } from "./copy";
+import { CaseFile } from "./sections/CaseFile";
 import { Deck } from "./sections/Deck";
+import { Doctors } from "./sections/Doctors";
 import { Handover } from "./sections/Handover";
 import { Hero } from "./sections/Hero";
+import { Journey } from "./sections/Journey";
 import { MemoryGraph } from "./sections/MemoryGraph";
+import { Portal } from "./sections/Portal";
 import { RedFlag } from "./sections/RedFlag";
 import { Talk } from "./sections/Talk";
 import { useDemo } from "./store";
@@ -13,7 +17,7 @@ import { VoiceBar } from "./voice/VoiceBar";
 
 const Background = lazy(() => import("./bg/Background").then((m) => ({ default: m.Background })));
 
-const ICONS = [Waveform, SquaresFour, Brain, Stethoscope, Siren, ChatCircleDots];
+const ICONS = [Waveform, Path, SquaresFour, Brain, FolderOpen, UsersThree, Stethoscope, Siren, Monitor, ChatCircleDots];
 
 function Clock() {
   const ref = useRef<HTMLSpanElement>(null);
@@ -28,13 +32,15 @@ function Clock() {
   return <span ref={ref} />;
 }
 
+const go = (i: number) => document.getElementById(SECTIONS[i].id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+const goTo = (id: (typeof SECTIONS)[number]["id"]) => go(SECTIONS.findIndex((s) => s.id === id));
+
 export default function App() {
   const convo = useConversation();
   const section = useDemo((s) => s.section);
   const setSection = useDemo((s) => s.setSection);
   const level = useDemo((s) => s.level);
 
-  // Which section is in view drives the rail and the 3D field.
   useEffect(() => {
     const els = SECTIONS.map((s) => document.getElementById(s.id)).filter((el): el is HTMLElement => Boolean(el));
     const io = new IntersectionObserver(
@@ -42,13 +48,11 @@ export default function App() {
         const best = entries.filter((e) => e.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
         if (best) setSection(els.indexOf(best.target as HTMLElement));
       },
-      { threshold: [0.35, 0.6] },
+      { threshold: [0.25, 0.5] },
     );
     els.forEach((el) => io.observe(el));
     return () => io.disconnect();
   }, [setSection]);
-
-  const go = (i: number) => document.getElementById(SECTIONS[i].id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   return (
     <div className={`app level-${level}`}>
@@ -73,7 +77,7 @@ export default function App() {
           const Icon = ICONS[i];
           return (
             <button key={s.id} onClick={() => go(i)} aria-current={i === section} aria-label={s.label} title={s.label}>
-              <Icon size={20} weight={i === section ? "fill" : "regular"} />
+              <Icon size={19} weight={i === section ? "fill" : "regular"} />
               <span className="tip">{s.label}</span>
             </button>
           );
@@ -82,10 +86,14 @@ export default function App() {
 
       <main className="page">
         <Hero onNext={() => go(1)} />
+        <Journey />
         <Deck />
         <MemoryGraph />
+        <CaseFile onTalk={() => goTo("talk")} onDoctors={() => goTo("doctors")} />
+        <Doctors />
         <Handover />
         <RedFlag />
+        <Portal />
         <Talk convo={convo} />
         <footer className="foot">
           <span>Built for the Build, Ship, Shape: Amazon Developer Hackathon · Alexa+ track</span>

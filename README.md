@@ -49,6 +49,14 @@ frosted glass sections over it. Sections: Voice (hero), Deck (live tiles), Memor
 Rahul's complaints joined by golden rays with real cosine distances), Handover (the on-call queue card and a
 presentations chart), Red flag (the escalation flow), and Talk (conversation plus a trace of every tool call).
 
+The clinic from nirog-memory.vercel.app is ported in as well: the care loop and trust architecture, the
+patient case file (recurrence verdict, SBAR handover, timeline in the patient's own words), the doctors
+directory with a call room (real camera and microphone, mute and camera toggles), and the doctor portal as a
+glass app window: dashboard with stat tiles, on-call switch and the triage-sorted queue, patients with consent
+and ABHA badges, the chart with ARIA handover and care history, the consultation form (assessment, prescription,
+tests, follow-up) that files an encounter, the trust log, and settings. Consults escalated by Alexa+ land in
+the queue; every tool call is written to the trust log.
+
 A glass voice bar follows the page. Everything it says is a tool result from this server over Streamable HTTP;
 browser speech handles input and output, and the sphere turns red on an emergency.
 
