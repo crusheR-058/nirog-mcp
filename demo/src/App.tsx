@@ -48,7 +48,10 @@ const goTo = (id: (typeof SECTIONS)[number]["id"]) => go(SECTIONS.findIndex((s) 
 
 export default function App() {
   const hash = useHashRoute();
-  if (hash.startsWith("#/doctor")) {
+  const setRoute = useDemo((s) => s.setRoute);
+  const isDoctor = hash.startsWith("#/doctor");
+  useEffect(() => setRoute(isDoctor ? "doctor" : "deck"), [isDoctor, setRoute]);
+  if (isDoctor) {
     return (
       <div className="app">
         <Suspense fallback={<div className="bg" aria-hidden="true" />}><Background /></Suspense>

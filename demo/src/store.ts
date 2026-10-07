@@ -29,6 +29,8 @@ interface DemoState {
   complete: boolean;
   /** Index of the page section in view. Drives the rail and the 3D field. */
   section: number;
+  /** "deck" for the main page, "doctor" for the dedicated doctor page. The field keeps out of the way on the latter. */
+  route: "deck" | "doctor";
   lastReply: { text: string; level: Level; at: number } | null;
   consults: number;
   alerts: number;
@@ -50,6 +52,7 @@ interface DemoState {
   setPhase: (p: Phase) => void;
   setLevel: (l: Level) => void;
   setSection: (s: number) => void;
+  setRoute: (r: "deck" | "doctor") => void;
   addTurn: (t: Omit<Turn, "id">) => void;
   addTrace: (t: Omit<Trace, "id">) => number;
   finishTrace: (id: number, patch: Partial<Trace>) => void;
@@ -80,6 +83,7 @@ export const useDemo = create<DemoState>((set) => ({
   traces: [],
   complete: false,
   section: 0,
+  route: "deck",
   lastReply: null,
   consults: 0,
   alerts: 0,
@@ -97,6 +101,7 @@ export const useDemo = create<DemoState>((set) => ({
   setPhase: (phase) => set({ phase }),
   setLevel: (level) => set({ level }),
   setSection: (section) => set((s) => (s.section === section ? s : { section })),
+  setRoute: (route) => set((s) => (s.route === route ? s : { route })),
   addTurn: (t) =>
     set((s) => ({
       turns: [...s.turns, { ...t, id: seq++ }],

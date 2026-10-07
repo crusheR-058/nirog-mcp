@@ -45,6 +45,7 @@ function ParticleSphere({ count }: { count: number }) {
   const phase = useDemo((s) => s.phase);
   const level = useDemo((s) => s.level);
   const section = useDemo((s) => s.section);
+  const route = useDemo((s) => s.route);
   const tint = useRef(new THREE.Color("#ffffff"));
 
   const { base, scatter, colors } = useMemo(() => {
@@ -80,7 +81,7 @@ function ParticleSphere({ count }: { count: number }) {
     const geo = points.current?.geometry;
     if (!geo) return;
     // How dispersed the cloud is: tight sphere on the hero, dispersed in the data sections, tight again for Talk.
-    const target = section === 0 || section === LAST ? 0 : section === MEMORY ? 0.55 : 0.85;
+    const target = route === "doctor" ? 0.9 : section === 0 || section === LAST ? 0 : section === MEMORY ? 0.55 : 0.85;
     spread.current += (target - spread.current) * (1 - Math.pow(0.02, dt));
     const s = spread.current;
     const amp = phase === "listening" ? 0.16 : phase === "speaking" ? 0.11 : phase === "thinking" ? 0.06 : 0.035;
@@ -127,11 +128,12 @@ function Rig() {
   const { camera } = useThree();
   const pointer = usePointer();
   const section = useDemo((s) => s.section);
+  const route = useDemo((s) => s.route);
   useFrame(() => {
     // The sphere sits centre on the hero and Talk sections, and slides aside behind the data sections.
     // Hero: sphere right of the copy. Talk: sphere above the cards. Data sections: the cloud drifts aside.
-    const tx = section === 0 ? -3.1 : section === LAST ? 0 : 2.6;
-    const ty = section === LAST ? -2.3 : 0;
+    const tx = route === "doctor" ? 3.2 : section === 0 ? -3.1 : section === LAST ? 0 : 2.6;
+    const ty = route === "doctor" ? -1.2 : section === LAST ? -2.3 : 0;
     camera.position.x += (tx + pointer.current.x * 0.25 - camera.position.x) * 0.03;
     camera.position.y += (ty + pointer.current.y * 0.15 - camera.position.y) * 0.03;
     camera.lookAt(0, 0.1, 0);
