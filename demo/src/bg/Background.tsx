@@ -1,6 +1,5 @@
 import { Suspense, useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Environment, Float } from "@react-three/drei";
 import { Bloom, EffectComposer, Noise, Vignette } from "@react-three/postprocessing";
 import { BlendFunction } from "postprocessing";
 import * as THREE from "three";
@@ -120,102 +119,6 @@ function ParticleSphere({ count }: { count: number }) {
   );
 }
 
-/* ── Crystals: slow, refractive, parallax with the pointer ────────────────── */
-const CRYSTALS: Array<{ p: [number, number, number]; s: number; r: number; detail: 0 | 1 }> = [
-  { p: [-4.6, 2.2, -2], s: 1.9, r: 0.2, detail: 0 },
-  { p: [4.8, -1.6, -3], s: 2.4, r: 0.9, detail: 0 },
-  { p: [-3.4, -2.6, -4], s: 1.3, r: 1.7, detail: 1 },
-  { p: [3.6, 2.8, -6], s: 1.6, r: 2.5, detail: 0 },
-  { p: [0.2, -3.4, -5], s: 1.1, r: 3.1, detail: 1 },
-  { p: [-6.5, -0.4, -7], s: 2.2, r: 4.0, detail: 0 },
-  { p: [6.8, 0.8, -8], s: 1.5, r: 5.2, detail: 1 },
-];
-
-function Crystals({ low }: { low: boolean }) {
-  const groups = useRef<Array<THREE.Group | null>>([]);
-  const pointer = usePointer();
-  const section = useDemo((s) => s.section);
-  const material = useMemo(
-    () =>
-      low
-        ? new THREE.MeshStandardMaterial({ color: "#9fb7c4", transparent: true, opacity: 0.16, roughness: 0.2, metalness: 0.1, flatShading: true })
-        : new THREE.MeshPhysicalMaterial({
-            color: "#dfe9ee",
-            transmission: 1,
-            thickness: 1.4,
-            roughness: 0.14,
-            ior: 1.45,
-            metalness: 0,
-            envMapIntensity: 1.2,
-            attenuationColor: new THREE.Color("#7fd6cd"),
-            attenuationDistance: 2.5,
-            flatShading: true,
-          }),
-    [low],
-  );
-  useFrame((_, dt) => {
-    groups.current.forEach((g, i) => {
-      if (!g) return;
-      const c = CRYSTALS[i];
-      g.rotation.x += dt * 0.08 * (i % 2 ? 1 : -1);
-      g.rotation.y += dt * 0.06;
-      // Parallax: deeper crystals move less.
-      const depth = 1 / (1 + Math.abs(c.p[2]) * 0.25);
-      const tx = c.p[0] + pointer.current.x * 0.9 * depth + (section > 0 ? (c.p[0] > 0 ? 1.2 : -1.2) : 0);
-      const ty = c.p[1] + pointer.current.y * 0.6 * depth;
-      g.position.x += (tx - g.position.x) * 0.03;
-      g.position.y += (ty - g.position.y) * 0.03;
-    });
-  });
-  return (
-    <>
-      {CRYSTALS.map((c, i) => (
-        <Float key={i} speed={0.7 + i * 0.1} rotationIntensity={0} floatIntensity={0.6}>
-          <group ref={(el) => { groups.current[i] = el; }} position={c.p} rotation={[c.r, c.r * 0.6, 0]} scale={c.s}>
-            <mesh material={material}>
-              <icosahedronGeometry args={[1, c.detail]} />
-            </mesh>
-            <mesh>
-              <icosahedronGeometry args={[1.001, c.detail]} />
-              <meshBasicMaterial color="#bfe9f5" wireframe transparent opacity={0.07} />
-            </mesh>
-          </group>
-        </Float>
-      ))}
-    </>
-  );
-}
-
-/* ── Wireframe tetrahedra drifting through the field ──────────────────────── */
-function Shards({ count }: { count: number }) {
-  const mesh = useRef<THREE.InstancedMesh>(null);
-  const seeds = useMemo(() => Array.from({ length: count }, () => ({
-    p: new THREE.Vector3((Math.random() - 0.5) * 22, (Math.random() - 0.5) * 12, -2 - Math.random() * 12),
-    r: new THREE.Euler(Math.random() * Math.PI, Math.random() * Math.PI, 0),
-    s: 0.12 + Math.random() * 0.3,
-    v: 0.1 + Math.random() * 0.3,
-  })), [count]);
-  const dummy = useMemo(() => new THREE.Object3D(), []);
-  useFrame((state) => {
-    if (!mesh.current) return;
-    const t = state.clock.elapsedTime;
-    seeds.forEach((s, i) => {
-      dummy.position.set(s.p.x, s.p.y + Math.sin(t * s.v + i) * 0.4, s.p.z);
-      dummy.rotation.set(s.r.x + t * s.v * 0.5, s.r.y + t * s.v * 0.3, 0);
-      dummy.scale.setScalar(s.s);
-      dummy.updateMatrix();
-      mesh.current!.setMatrixAt(i, dummy.matrix);
-    });
-    mesh.current.instanceMatrix.needsUpdate = true;
-  });
-  return (
-    <instancedMesh ref={mesh} args={[undefined, undefined, count]}>
-      <tetrahedronGeometry args={[1, 0]} />
-      <meshBasicMaterial color="#8fe3ff" wireframe transparent opacity={0.35} />
-    </instancedMesh>
-  );
-}
-
 function Rig() {
   const { camera } = useThree();
   const pointer = usePointer();
@@ -252,11 +155,8 @@ export function Background() {
         <pointLight position={[-5, -2, 2]} intensity={2.5} color="#3dd6c3" distance={14} />
         <pointLight position={[5, 3, -2]} intensity={1.6} color="#8b7cf6" distance={14} />
         <Suspense fallback={null}>
-          {!low && <Environment preset="city" />}
           <Rig />
           <ParticleSphere count={low ? 3500 : 11000} />
-          <Crystals low={low} />
-          <Shards count={low ? 12 : 36} />
           {!low && (
             <EffectComposer multisampling={0}>
               <Bloom luminanceThreshold={0.55} luminanceSmoothing={0.3} intensity={0.9} mipmapBlur radius={0.7} />
