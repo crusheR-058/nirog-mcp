@@ -10,6 +10,11 @@ export const DEMO_HISTORY: Array<{ patientId: string; daysAgo: number; text: str
   { patientId: "pat_rahul", daysAgo: 27, text: "blocked nose and a bit of a cough, think I caught something" },
   { patientId: "pat_rahul", daysAgo: 16, text: "I keep getting this pain when I stand up from my desk" },
   { patientId: "pat_sunita", daysAgo: 9, text: "feeling very tired lately and thirsty all the time" },
+  // Lakshmi reads as "watch": two knee visits inside thirty days, not yet a recurrence.
+  { patientId: "pat_lakshmi", daysAgo: 25, text: "my knees hurt when I climb the stairs" },
+  { patientId: "pat_lakshmi", daysAgo: 6, text: "both knees are stiff again in the morning" },
+  // Imran's history is why a wheeze is an emergency for him and not for anyone else.
+  { patientId: "pat_imran", daysAgo: 20, text: "chest feels tight after working in the fields" },
 ];
 
 export async function seedDemoHistory(store: MemoryStore, embedder: Embedder, now = new Date()): Promise<void> {

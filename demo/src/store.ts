@@ -36,6 +36,9 @@ interface DemoState {
   alerts: number;
   /** True once the server reports memory as degraded; the case file says so. */
   memoryDegraded: boolean;
+  /** True while /api/clinic/live answers. Then the trust log and Alexa+ consults come from the server, not this tab. */
+  live: boolean;
+  serverAudit: AuditEvent[];
 
   /* clinic */
   queue: QueueItem[];
@@ -70,13 +73,48 @@ interface DemoState {
   endConsult: () => void;
   setCallDoctor: (id: string | null) => void;
   setDoctor: (d: DemoState["doctor"]) => void;
+  applyLive: (feed: LiveFeed) => void;
   reset: () => void;
+}
+
+export interface LiveFeed {
+  consults: Array<{ id: string; patientId: string; triage: Level; reason: string; at: string }>;
+  audit: AuditEvent[];
+}
+
+const SESSION_KEY = "nirog-doctor-session";
+function authHeader(): Record<string, string> {
+  try {
+    const t = localStorage.getItem(SESSION_KEY);
+    return t ? { authorization: `Bearer ${t}` } : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Pull the clinic's live state from the server. Falls back to this tab's own copy when it cannot. */
+export async function refreshLive(): Promise<void> {
+  try {
+    const r = await fetch(`${location.origin}/api/clinic/live`, { headers: authHeader() });
+    if (!r.ok) throw new Error(String(r.status));
+    useDemo.getState().applyLive((await r.json()) as LiveFeed);
+  } catch {
+    if (useDemo.getState().live) useDemo.setState({ live: false });
+  }
+}
+
+async function postAudit(e: Omit<AuditEvent, "id" | "at">): Promise<void> {
+  try {
+    await fetch(`${location.origin}/api/clinic/audit`, { method: "POST", headers: { "content-type": "application/json", ...authHeader() }, body: JSON.stringify(e) });
+  } finally {
+    void refreshLive();
+  }
 }
 
 let seq = 1;
 const now = new Date();
 
-export const useDemo = create<DemoState>((set) => ({
+export const useDemo = create<DemoState>((set, get) => ({
   phase: "idle",
   level: "routine",
   turns: [],
@@ -88,6 +126,8 @@ export const useDemo = create<DemoState>((set) => ({
   consults: 0,
   alerts: 0,
   memoryDegraded: false,
+  live: false,
+  serverAudit: [],
   queue: buildQueue(now),
   audit: seedAudit(now),
   encounters: ENCOUNTERS,
@@ -118,7 +158,11 @@ export const useDemo = create<DemoState>((set) => ({
   setMemoryDegraded: (memoryDegraded) => set({ memoryDegraded }),
   addQueue: (q) => set((s) => ({ queue: [q, ...s.queue] })),
   setQueueState: (id, state) => set((s) => ({ queue: s.queue.map((q) => (q.id === id ? { ...q, state } : q)) })),
-  addAudit: (e) => set((s) => ({ audit: [{ ...e, id: `a${seq++}`, at: new Date().toISOString() }, ...s.audit].slice(0, 40) })),
+  // With a live server the trust log lives there: post the line and read it back. Otherwise keep it in this tab.
+  addAudit: (e) => {
+    if (get().live) void postAudit(e);
+    else set((s) => ({ audit: [{ ...e, id: `a${seq++}`, at: new Date().toISOString() }, ...s.audit].slice(0, 40) }));
+  },
   fileEncounter: (e) => set((s) => ({ encounters: [e, ...s.encounters] })),
   setOnCall: (onCall) => set({ onCall }),
   setPortalTab: (portalTab) => set({ portalTab }),
@@ -133,5 +177,14 @@ export const useDemo = create<DemoState>((set) => ({
   endConsult: () => set({ consultQueueId: null }),
   setCallDoctor: (callDoctorId) => set({ callDoctorId }),
   setDoctor: (doctor) => set({ doctor }),
+  applyLive: (feed) =>
+    set((s) => {
+      // Consults that Alexa+ queued through the MCP server join the doctor's queue once; their local state is kept after that.
+      const known = new Set(s.queue.map((q) => q.id));
+      const fresh: QueueItem[] = feed.consults
+        .filter((c) => !known.has(c.id))
+        .map((c) => ({ id: c.id, patientId: c.patientId, kind: c.triage === "emergency" ? "emergency" : "new", triage: c.triage, state: "waiting", checkedInAt: c.at, scheduledFor: c.at, channel: "audio", reason: `Alexa+ · ${c.reason}`, quality: "fair", redFlagCount: 1, source: "alexa" }));
+      return { live: true, serverAudit: feed.audit, queue: fresh.length ? [...fresh, ...s.queue] : s.queue };
+    }),
   reset: () => set({ phase: "idle", level: "routine", turns: [], traces: [], complete: false, lastReply: null, consults: 0, alerts: 0, memoryDegraded: false }),
 }));

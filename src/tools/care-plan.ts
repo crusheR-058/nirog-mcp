@@ -1,7 +1,9 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { EncounterRecord, NirogData, PatientRecord, PrescribedItem } from "../data/types.js";
+import { audit } from "../audit.js";
 import { consentDenial, type ConsentScope } from "../auth/consent.js";
+import type { EncounterRecord, NirogData, PatientRecord, PrescribedItem } from "../data/types.js";
+import { langInput, slotName, T, type Lang } from "../i18n.js";
 
 const DAY_MS = 86_400_000;
 
@@ -51,20 +53,11 @@ function medicationLine(item: PrescribedItem, startedAt: Date, now: Date): Medic
 }
 
 /** Pure function so it is unit-testable with a fixed `now`. */
-export function buildCarePlan(patient: PatientRecord, encounter: EncounterRecord | null, now: Date): CarePlanSummary {
+export function buildCarePlan(patient: PatientRecord, encounter: EncounterRecord | null, now: Date, lang: Lang = "en"): CarePlanSummary {
   const base = { id: patient.id, name: patient.fullName, conditions: patient.conditions, allergies: patient.allergies };
 
   if (!encounter) {
-    return {
-      patient: base,
-      planFrom: null,
-      chiefComplaint: null,
-      medications: [],
-      pendingTests: [],
-      followUp: null,
-      doctorInstructions: null,
-      spoken: `${patient.fullName} has no care plan on file yet. If something is bothering them, I can start an intake.`,
-    };
+    return { patient: base, planFrom: null, chiefComplaint: null, medications: [], pendingTests: [], followUp: null, doctorInstructions: null, spoken: T.noPlan(lang, patient.fullName) };
   }
 
   const startedAt = new Date(encounter.startedAt);
@@ -85,19 +78,15 @@ export function buildCarePlan(patient: PatientRecord, encounter: EncounterRecord
   }
 
   const parts: string[] = [];
-  if (active.length === 0) parts.push(`${patient.fullName} has no active medicines right now.`);
-  else
-    parts.push(
-      `${patient.fullName} has ${active.length} active medicine${active.length > 1 ? "s" : ""}: ` +
-        active.map((m) => `${m.drug} ${m.strength ?? ""} ${m.dose ?? ""} ${m.timesOfDay.join(" and ")}`.replace(/\s+/g, " ").trim()).join("; ") +
-        ".",
-    );
-  if (pendingTests.length) parts.push(`Pending tests: ${pendingTests.join(" and ")}.`);
-  if (followUp) {
-    if (followUp.status === "overdue") parts.push(`The follow-up with the doctor is overdue by ${-followUp.daysUntil} days.`);
-    else if (followUp.status === "due_today") parts.push("The follow-up with the doctor is due today.");
-    else parts.push(`The next follow-up is in ${followUp.daysUntil} days.`);
+  if (active.length === 0) parts.push(T.noActiveMeds(lang, patient.fullName));
+  else {
+    const list = active
+      .map((m) => `${m.drug} ${m.strength ?? ""} ${T.dose(lang, m.dose)} ${m.timesOfDay.map((s) => slotName(s, lang)).join(T.and(lang))}`.replace(/\s+/g, " ").trim())
+      .join("; ");
+    parts.push(T.activeMeds(lang, patient.fullName, active.length, list));
   }
+  if (pendingTests.length) parts.push(T.pendingTests(lang, pendingTests));
+  if (followUp) parts.push(T.followUp(lang, followUp.status, followUp.daysUntil));
 
   return {
     patient: base,
@@ -120,17 +109,22 @@ export function registerCarePlanTool(server: McpServer, data: NirogData, scope: 
         "Returns the patient's current care plan from their last doctor consultation: active medicines with times of day, " +
         "pending tests, and when the next follow-up is due. Includes a `spoken` field ready to read aloud. " +
         "Use when the patient asks what medicines to take, whether tests are pending, or when to see the doctor next.",
-      inputSchema: { patient_id: z.string().describe("Nirog patient id, e.g. pat_rahul") },
+      inputSchema: { patient_id: z.string().describe("Nirog patient id, e.g. pat_rahul"), language: langInput },
     },
-    async ({ patient_id }) => {
-      const denied = consentDenial(scope, patient_id);
-      if (denied) return { isError: true, content: [{ type: "text", text: denied }] };
+    async ({ patient_id, language }) => {
+      const lang: Lang = language ?? "en";
+      const denied = consentDenial(scope, patient_id, lang);
+      if (denied) {
+        await audit(data, "Refused get_care_plan", patient_id, "No consent for this patient on this device");
+        return { isError: true, content: [{ type: "text", text: denied }] };
+      }
       const patient = await data.getPatient(patient_id);
       if (!patient) {
         return { isError: true, content: [{ type: "text", text: `No patient with id ${patient_id}.` }] };
       }
       const encounter = await data.getLatestEncounter(patient_id);
-      const plan = buildCarePlan(patient, encounter, now());
+      const plan = buildCarePlan(patient, encounter, now(), lang);
+      await audit(data, "Called get_care_plan", patient.fullName, "Patient asked about medicines or follow-up");
       return { content: [{ type: "text", text: JSON.stringify(plan) }] };
     },
   );

@@ -9,7 +9,7 @@
  */
 
 import { detectAll, type RecurrenceFlag } from "../clinical/recurrence.js";
-import { REGION_LABELS } from "../clinical/regions.js";
+import { shortWhen, T, type Lang } from "../i18n.js";
 import { inheritThresholdFor, resolveRegion, type ResolvedRegion } from "../clinical/resolve.js";
 import type { Embedder } from "./embed.js";
 import type { ComplaintRecord, MemoryStore, RecallMatch } from "./types.js";
@@ -117,39 +117,26 @@ export async function remember(
   return { complaintId, region, matches, history, flags, embedProvider, degraded, degradedReason, latencyMs: Date.now() - started };
 }
 
-export function shortWhen(d: Date, now: Date): string {
-  const days = Math.round((now.getTime() - d.getTime()) / 86_400_000);
-  if (days <= 1) return "yesterday";
-  if (days < 14) return `${days} days ago`;
-  const weeks = Math.round(days / 7);
-  if (weeks < 9) return `${weeks} weeks ago`;
-  return `${Math.round(days / 30)} months ago`;
-}
+export { shortWhen };
 
 /**
  * One sentence of recall for the voice assistant to say, chosen by the same
  * deterministic rule that drives the doctor's chart. Ported from Nirog's
- * /api/memory/context opener.
+ * /api/memory/context opener. The patient's own words are quoted unchanged in
+ * either language.
  */
-export function recallSentence(r: RememberResult, now: Date): string | null {
-  if (r.degraded) {
-    return "One thing first. I can't get to your records right now, so I won't be able to tell you if this has come up before.";
-  }
+export function recallSentence(r: RememberResult, now: Date, lang: Lang = "en"): string | null {
+  if (r.degraded) return T.memoryDegraded(lang);
   const flag = r.flags[0];
   if (flag?.level === "recurrent") {
-    const region = REGION_LABELS[flag.region].toLowerCase();
     const first = flag.complaints[0];
-    return (
-      `You have mentioned your ${region} ${flag.visitCount} times in the last ${flag.spanDays} days. ` +
-      `${shortWhen(first.occurredAt, now).replace(/^./, (c) => c.toUpperCase())} you said "${first.rawText}". Is this the same thing?`
-    );
+    return T.recallRecurrent(lang, { region: flag.region, visits: flag.visitCount, days: flag.spanDays, when: shortWhen(first.occurredAt, now, lang), text: first.rawText });
   }
   if (flag?.level === "watch") {
-    const region = REGION_LABELS[flag.region].toLowerCase();
     const prev = flag.complaints.filter((c) => c.occurredAt < now).at(-1);
-    if (prev) return `You mentioned your ${region} ${shortWhen(prev.occurredAt, now)} too. Is this the same problem?`;
+    if (prev) return T.recallWatch(lang, { region: flag.region, when: shortWhen(prev.occurredAt, now, lang) });
   }
   const closest = r.matches[0];
-  if (closest) return `${shortWhen(closest.occurredAt, now).replace(/^./, (c) => c.toUpperCase())} you told me "${closest.rawText}". Does this feel related?`;
+  if (closest) return T.recallClosest(lang, { when: shortWhen(closest.occurredAt, now, lang), text: closest.rawText });
   return null;
 }

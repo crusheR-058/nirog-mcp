@@ -11,7 +11,7 @@ import { MemoryGraph } from "./sections/MemoryGraph";
 import { Portal } from "./sections/Portal";
 import { RedFlag } from "./sections/RedFlag";
 import { Talk } from "./sections/Talk";
-import { useDemo } from "./store";
+import { refreshLive, useDemo } from "./store";
 import { useConversation } from "./voice/useConversation";
 import { VoiceBar } from "./voice/VoiceBar";
 
@@ -43,6 +43,7 @@ function Clock() {
   return <span ref={ref} />;
 }
 
+const greeting = () => { const h = new Date().getHours(); return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"; };
 const go = (i: number) => document.getElementById(SECTIONS[i].id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 const goTo = (id: (typeof SECTIONS)[number]["id"]) => go(SECTIONS.findIndex((s) => s.id === id));
 
@@ -51,6 +52,12 @@ export default function App() {
   const setRoute = useDemo((s) => s.setRoute);
   const isDoctor = hash.startsWith("#/doctor");
   useEffect(() => setRoute(isDoctor ? "doctor" : "deck"), [isDoctor, setRoute]);
+  // The portal reads what the MCP tools wrote. Poll gently; a tool call also refreshes at once.
+  useEffect(() => {
+    void refreshLive();
+    const t = setInterval(() => void refreshLive(), 5000);
+    return () => clearInterval(t);
+  }, [isDoctor]);
   if (isDoctor) {
     return (
       <div className="app">
@@ -91,7 +98,7 @@ function Deck3() {
       <header className="topbar glass">
         <div className="brand">
           <span className="mark"><Waveform size={16} weight="bold" /></span>
-          <div><b>Nirog</b><small>for Alexa+ · Good evening, Rahul</small></div>
+          <div><b>Nirog</b><small>for Alexa+ · {greeting()}, Rahul</small></div>
         </div>
         <div className="topbar-right">
           <span className="clock"><Clock /><small>Sultanpur, UP</small></span>

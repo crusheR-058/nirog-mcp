@@ -1,4 +1,6 @@
-/* Browser speech: recognition for the patient, synthesis for the assistant. */
+/* Browser speech: recognition for the patient, synthesis for the assistant. English (India) and Hindi. */
+
+import type { Language } from "./copy";
 
 /* The Web Speech recognition API has no lib.dom typings; this is the slice we use. */
 interface RecognitionResultEvent { results: ArrayLike<ArrayLike<{ transcript: string }>> }
@@ -20,11 +22,13 @@ const Ctor: RecognitionCtor | undefined =
 
 export const canListen = Boolean(Ctor);
 
-export function listenOnce(lang = "en-IN"): Promise<string> {
+const LOCALE: Record<Language, string> = { en: "en-IN", hi: "hi-IN" };
+
+export function listenOnce(language: Language = "en"): Promise<string> {
   return new Promise((resolve, reject) => {
     if (!Ctor) return reject(new Error("This browser can't hear you. Type instead."));
     const rec = new Ctor();
-    rec.lang = lang;
+    rec.lang = LOCALE[language];
     rec.interimResults = false;
     rec.maxAlternatives = 1;
     let done = false;
@@ -43,21 +47,20 @@ export function listenOnce(lang = "en-IN"): Promise<string> {
   });
 }
 
-let voice: SpeechSynthesisVoice | undefined;
-function pickVoice() {
+/** Voices load asynchronously in most browsers, so the choice is made at speak time, not at import time. */
+function pickVoice(language: Language): SpeechSynthesisVoice | undefined {
   const voices = speechSynthesis.getVoices();
-  voice =
+  if (language === "hi") return voices.find((v) => v.lang === "hi-IN") ?? voices.find((v) => v.lang.startsWith("hi"));
+  return (
     voices.find((v) => v.lang === "en-IN" && /female|Heera|Neerja/i.test(v.name)) ??
     voices.find((v) => v.lang === "en-IN") ??
     voices.find((v) => v.lang.startsWith("en") && /female|Zira|Samantha|Google UK English Female/i.test(v.name)) ??
-    voices.find((v) => v.lang.startsWith("en"));
+    voices.find((v) => v.lang.startsWith("en"))
+  );
 }
-if ("speechSynthesis" in window) {
-  pickVoice();
-  speechSynthesis.onvoiceschanged = pickVoice;
-}
+if ("speechSynthesis" in window) speechSynthesis.onvoiceschanged = () => undefined; // prompts some browsers to load the list
 
-export function speak(text: string, onEnd?: () => void) {
+export function speak(text: string, onEnd?: () => void, language: Language = "en") {
   if (!("speechSynthesis" in window)) return onEnd?.();
   speechSynthesis.cancel();
   let done = false;
@@ -67,10 +70,12 @@ export function speak(text: string, onEnd?: () => void) {
     clearTimeout(guard);
     onEnd?.();
   };
-  // Some engines never fire onend (headless, muted tabs). Give up after the time the words would take.
+  // Some engines never fire onend (headless, muted tabs, no voice for the language). Give up after the time the words would take.
   const guard = setTimeout(finish, Math.max(2500, text.split(/\s+/).length * 420));
   const u = new SpeechSynthesisUtterance(text);
+  const voice = pickVoice(language);
   if (voice) u.voice = voice;
+  u.lang = LOCALE[language];
   u.rate = 0.98;
   u.onend = finish;
   u.onerror = finish;

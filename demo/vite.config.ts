@@ -21,6 +21,6 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    proxy: { "/mcp": "http://127.0.0.1:3333", "/health": "http://127.0.0.1:3333" },
+    proxy: { "/mcp": "http://127.0.0.1:3333", "/health": "http://127.0.0.1:3333", "/auth": "http://127.0.0.1:3333", "/api": "http://127.0.0.1:3333" },
   },
 });

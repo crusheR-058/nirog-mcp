@@ -9,6 +9,7 @@
  */
 
 import { createHash } from "node:crypto";
+import { normalize } from "../clinical/normalize.js";
 
 export const EMBED_DIMS = 1024;
 
@@ -48,6 +49,15 @@ const CONCEPTS: Record<string, readonly string[]> = {
   fever: ["systemic"], tired: ["systemic"], fatigue: ["systemic"],
   knee: ["leg"], leg: ["leg"], ankle: ["leg"], shoulder: ["arm"],
   neck: ["neck"], rash: ["skin"], itchy: ["skin"],
+
+  // Hindi, in the folded spelling from clinical/normalize.ts
+  "कमर": ["back", "lower"], "पीठ": ["back"], "दर्द": ["pain"], "तकलीफ": ["pain"], "अकडन": ["pain", "stiffness"],
+  "फिर": ["recurrence"], "दोबारा": ["recurrence"], "वापस": ["recurrence"], "अभी": ["persistent"],
+  "दिन": ["duration"], "हफ्ते": ["duration"], "महीने": ["duration"], "सुबह": ["diurnal"], "रात": ["diurnal"],
+  "सिर": ["head"], "सिरदर्द": ["head", "pain"], "पेट": ["abdomen"], "उल्टी": ["abdomen"],
+  "सीने": ["chest"], "छाती": ["chest"], "खांसी": ["chest"], "सांस": ["chest"],
+  "बुखार": ["systemic"], "थकान": ["systemic"], "कमजोरी": ["systemic"],
+  "घुटने": ["leg"], "पैर": ["leg"], "कंधे": ["arm"], "हाथ": ["arm"], "गर्दन": ["neck"], "खुजली": ["skin"],
 };
 
 const STOP = new Set([
@@ -55,12 +65,12 @@ const STOP = new Set([
   "and", "or", "but", "for", "with", "this", "that", "been", "have", "has",
   "had", "am", "was", "were", "be", "get", "getting", "got", "from", "when",
   "up", "out", "so", "very", "really", "just", "some", "few", "bit",
+  "है", "हैं", "में", "से", "का", "की", "के", "को", "हो", "रहा", "रही", "और", "मेरे", "मेरी", "मेरा", "यह", "भी", "था", "थी",
 ]);
 
 function tokenize(text: string): string[] {
-  return text
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+  return normalize(text)
+    .replace(/[^\p{L}\p{M}\p{N}\s]/gu, " ")
     .split(/\s+/)
     .filter((t) => t.length > 1 && !STOP.has(t));
 }

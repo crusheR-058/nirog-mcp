@@ -9,6 +9,7 @@ import { createNirogServer, SERVER_NAME, SERVER_VERSION } from "./server.js";
 import { consentVerifier } from "./auth/tokens.js";
 import { scopeFromAuth } from "./auth/consent.js";
 import { authRoutes } from "./auth/routes.js";
+import { clinicRoutes } from "./clinic/routes.js";
 
 const PORT = Number(process.env.PORT ?? 3333);
 const HOST = process.env.HOST ?? "127.0.0.1";
@@ -44,6 +45,9 @@ async function handleMcp(req: Request, res: Response) {
 
 // Doctor sign-in for the portal page: Google, then one-time verification.
 app.use("/auth", authRoutes());
+
+// What the doctor portal reads: consults queued and audit lines written through the MCP tools.
+app.use("/api/clinic", clinicRoutes());
 
 // The demo, built by `pnpm build:demo` into dist/demo. Static, same-origin with /mcp.
 const demoDir = join(dirname(fileURLToPath(import.meta.url)), "..", "dist", "demo");

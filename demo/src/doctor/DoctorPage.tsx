@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, CheckCircle, GoogleLogo, IdentificationCard, Lock, ShieldCheck, SignOut, Waveform } from "@phosphor-icons/react";
 import { PortalWindow } from "../sections/Portal";
-import { useDemo } from "../store";
+import { refreshLive, useDemo } from "../store";
 import { fetchConfig, loadGis, loadSession, saveSession, startSession, verifyDoctor, type AuthConfig, type DoctorProfile } from "./auth";
 
 type Step = "loading" | "google" | "verify" | "portal";
@@ -109,6 +109,7 @@ export function DoctorPage({ onBack }: { onBack: () => void }) {
   function enter(d: DoctorProfile) {
     setDoctor(d);
     setDoctorIdentity({ name: d.name, email: d.email, specialty: d.specialty, picture: d.picture, registrationNo: d.registrationNo });
+    void refreshLive(); // the session is saved by now, so the clinic feed opens
     addAudit({ actorName: d.name, action: "Signed in", target: "Doctor portal", reason: "Google sign-in" });
     setStep("portal");
   }

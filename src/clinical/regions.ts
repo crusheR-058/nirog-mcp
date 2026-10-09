@@ -12,6 +12,8 @@
  * and buckets should be boring.
  */
 
+import { normalize } from "./normalize.js";
+
 export const REGIONS = [
   "lower_back",
   "upper_back",
@@ -55,7 +57,7 @@ const LEXICON: ReadonlyArray<{ region: Region; terms: readonly string[] }> = [
     terms: [
       "lower back", "low back", "lumbar", "small of my back", "small of the back",
       "base of my spine", "base of the spine", "lower spine", "sacroiliac",
-      "kamar", // Hindi/Urdu — patients code-switch mid-sentence and the chart should not lose it
+      "kamar", "कमर", // Hindi/Urdu — patients code-switch mid-sentence and the chart should not lose it
       "pain when i stand", "pain when standing", "ache when i stand",
       "hurts when i stand up", "sore when i get up",
     ],
@@ -64,19 +66,19 @@ const LEXICON: ReadonlyArray<{ region: Region; terms: readonly string[] }> = [
     region: "upper_back",
     terms: [
       "upper back", "shoulder blade", "shoulder blades", "between my shoulders",
-      "thoracic", "mid back", "middle of my back",
+      "thoracic", "mid back", "middle of my back", "पीठ",
     ],
   },
   {
     region: "neck",
-    terms: ["neck", "nape", "cervical", "stiff neck", "crick in my neck"],
+    terms: ["neck", "nape", "cervical", "stiff neck", "crick in my neck", "गर्दन", "gardan"],
   },
   {
     region: "head",
     terms: [
       "head", "headache", "migraine", "temple", "temples", "forehead",
       "behind my eyes", "sinus", "skull", "dizzy", "dizziness", "lightheaded",
-      "sar dard", // Hindi
+      "sar dard", "sir dard", "सिर", "सिरदर्द", "चक्कर", "माथे", // Hindi
     ],
   },
   {
@@ -85,6 +87,7 @@ const LEXICON: ReadonlyArray<{ region: Region; terms: readonly string[] }> = [
       "chest", "heart", "palpitation", "palpitations", "breathless",
       "short of breath", "shortness of breath", "wheeze", "wheezing",
       "cough", "coughing", "lungs", "ribs", "sternum",
+      "सीने", "सीना", "छाती", "खांसी", "सांस", "seene", "chhati", "khansi", "saans",
     ],
   },
   {
@@ -93,7 +96,7 @@ const LEXICON: ReadonlyArray<{ region: Region; terms: readonly string[] }> = [
       "stomach", "abdomen", "abdominal", "belly", "tummy", "gut",
       "nausea", "nauseous", "vomit", "vomiting", "diarrhoea", "diarrhea",
       "constipated", "constipation", "bloated", "bloating", "indigestion",
-      "acidity", "heartburn", "pet dard", // Hindi
+      "acidity", "heartburn", "pet dard", "पेट", "उल्टी", "दस्त", "ulti", // Hindi
     ],
   },
   {
@@ -107,7 +110,7 @@ const LEXICON: ReadonlyArray<{ region: Region; terms: readonly string[] }> = [
     region: "arm",
     terms: [
       "arm", "arms", "elbow", "wrist", "hand", "hands", "finger", "fingers",
-      "shoulder", "forearm", "thumb",
+      "shoulder", "forearm", "thumb", "हाथ", "कंधे", "कंधा", "कलाई", "बांह",
     ],
   },
   {
@@ -115,14 +118,14 @@ const LEXICON: ReadonlyArray<{ region: Region; terms: readonly string[] }> = [
     terms: [
       "leg", "legs", "knee", "knees", "ankle", "foot", "feet", "toe", "toes",
       "thigh", "calf", "calves", "shin", "hip", "hips", "sciatica",
-      "down my leg", "into my leg",
+      "down my leg", "into my leg", "पैर", "घुटने", "घुटना", "टांग", "एडी", "ghutne", "pair",
     ],
   },
   {
     region: "skin",
     terms: [
       "rash", "itch", "itchy", "itching", "hives", "eczema", "acne", "spot",
-      "spots", "skin", "boil", "blister", "mole",
+      "spots", "skin", "boil", "blister", "mole", "खुजली", "दाने", "चकत्ते", "khujli",
     ],
   },
   {
@@ -130,7 +133,7 @@ const LEXICON: ReadonlyArray<{ region: Region; terms: readonly string[] }> = [
     terms: [
       "fever", "tired", "tiredness", "fatigue", "exhausted", "weak", "weakness",
       "weight loss", "losing weight", "night sweats", "chills", "appetite",
-      "sleep", "sleeping", "insomnia", "bukhar", // Hindi
+      "sleep", "sleeping", "insomnia", "bukhar", "bukhaar", "बुखार", "कमजोरी", "थकान", "नींद", // Hindi
     ],
   },
   // Generic back terms last — anything that reached here didn't match a specific
@@ -194,7 +197,8 @@ function findWholeWord(hay: string, term: string): number[] {
  * manufacture a recurrence on its own.
  */
 export function classify(text: string): Classification {
-  const hay = ` ${text.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ")} `;
+  // Combining marks (\p{M}) are kept: stripping them would cut every Devanagari vowel sign out of the word.
+  const hay = ` ${normalize(text).replace(/[^\p{L}\p{M}\p{N}\s]/gu, " ").replace(/\s+/g, " ")} `;
 
   let best: { region: Region; terms: string[]; score: number } | null = null;
 

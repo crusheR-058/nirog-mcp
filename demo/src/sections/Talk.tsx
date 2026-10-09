@@ -1,11 +1,14 @@
 import { useEffect, useRef } from "react";
 import { ArrowCounterClockwise, Terminal } from "@phosphor-icons/react";
+import { PATIENTS } from "../clinic/data";
+import { TRIES } from "../copy";
 import { useDemo } from "../store";
 import type { useConversation } from "../voice/useConversation";
 
 export function Talk({ convo }: { convo: ReturnType<typeof useConversation> }) {
   const { turns, traces, complete, reset } = useDemo();
-  const { settings, setSettings, health, stop } = convo;
+  const { settings, setSettings, health, stop, handle, phase } = convo;
+  const busy = phase === "thinking" || phase === "listening";
   const convoRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     convoRef.current?.scrollTo({ top: convoRef.current.scrollHeight, behavior: "smooth" });
@@ -25,7 +28,17 @@ export function Talk({ convo }: { convo: ReturnType<typeof useConversation> }) {
             <button className="ghost" onClick={() => { stop(); reset(); }}><ArrowCounterClockwise size={14} weight="bold" /> Start over</button>
           </div>
           <div className="convo" ref={convoRef} aria-live="polite">
-            {turns.length === 0 && <p className="muted">Nothing yet. Try one of the chips in the bar.</p>}
+            {turns.length === 0 && (
+              <div className="tries" lang={settings.language}>
+                <p className="muted small">Five things to try. Each one reaches a different tool.</p>
+                {TRIES[settings.language].map((t) => (
+                  <button key={t.tool} className="try" onClick={() => void handle(t.say)} disabled={busy}>
+                    <span className="try-tool">{t.tool}</span>
+                    <span className="try-say">{t.say}</span>
+                  </button>
+                ))}
+              </div>
+            )}
             {turns.map((t) => (
               <div key={t.id} className={`turn ${t.role} ${t.level ?? ""}`}>
                 <span className="who">{t.role === "user" ? "Patient" : "Alexa+ · ARIA"}</span>
@@ -41,9 +54,9 @@ export function Talk({ convo }: { convo: ReturnType<typeof useConversation> }) {
               <label>Consent token<input value={settings.token} onChange={(e) => setSettings({ ...settings, token: e.target.value })} placeholder="empty for an open local server" /></label>
               <label>Patient
                 <select value={settings.patientId} onChange={(e) => setSettings({ ...settings, patientId: e.target.value })}>
-                  <option value="pat_rahul">pat_rahul · Rahul Yadav</option>
-                  <option value="pat_sunita">pat_sunita · Sunita Devi</option>
-                  <option value="pat_meena">pat_meena · Meena Singh</option>
+                  {PATIENTS.map((p) => (
+                    <option key={p.id} value={p.id}>{p.id} · {p.fullName}{p.conditions.length ? ` · ${p.conditions[0]}` : ""}</option>
+                  ))}
                 </select>
               </label>
             </div>

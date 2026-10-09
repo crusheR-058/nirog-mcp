@@ -6,13 +6,19 @@ import type { useConversation } from "./useConversation";
 
 type Convo = ReturnType<typeof useConversation>;
 
+const PLACEHOLDER = {
+  en: { idle: "Say what hurts…", listening: "Listening…", thinking: "Checking the record…", speaking: "Speaking…" },
+  hi: { idle: "तकलीफ़ बताइए…", listening: "सुन रही हूँ…", thinking: "रिकॉर्ड देख रही हूँ…", speaking: "बोल रही हूँ…" },
+};
+
 /** The glass bar that follows the page. Every reply you hear is a tool result from nirog-mcp. */
 export function VoiceBar({ convo }: { convo: Convo }) {
   const [typed, setTyped] = useState("");
   const [show, setShow] = useState(false);
   const lastReply = useDemo((s) => s.lastReply);
   const section = useDemo((s) => s.section);
-  const { phase, talk, handle, notice, canListen } = convo;
+  const { phase, talk, handle, notice, canListen, settings, setSettings } = convo;
+  const lang = settings.language;
   const busy = phase === "thinking" || phase === "listening";
 
   // The reply card shows for a while after each answer, unless the Talk section already shows the whole conversation.
@@ -26,7 +32,7 @@ export function VoiceBar({ convo }: { convo: Convo }) {
   const replyVisible = show && lastReply && section !== SECTIONS.length - 1;
 
   return (
-    <div className="voicebar-wrap">
+    <div className="voicebar-wrap" lang={lang}>
       {replyVisible && (
         <div className={`reply-card ${lastReply.level}`} role="status">
           <span className="who"><Waveform size={14} weight="bold" /> Alexa+ · ARIA</span>
@@ -43,18 +49,22 @@ export function VoiceBar({ convo }: { convo: Convo }) {
           void handle(t);
         }}
       >
-        <button type="button" className={`mic ${phase}`} onClick={talk} disabled={busy && phase !== "listening"} aria-label={canListen ? "Talk" : "Microphone unavailable"} title={canListen ? "Hold a thought, then talk" : "This browser cannot hear you. Type instead."}>
+        <button type="button" className={`mic ${phase}`} onClick={talk} disabled={busy && phase !== "listening"} aria-label={canListen ? "Talk" : "Microphone unavailable"} title={canListen ? "Talk" : "This browser cannot hear you. Type instead."}>
           <Microphone size={20} weight="fill" />
           <span className="ring" />
         </button>
         <label htmlFor="ask" className="sr-only">Say what hurts</label>
-        <input id="ask" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={phase === "listening" ? "Listening…" : phase === "thinking" ? "Checking the record…" : phase === "speaking" ? "Speaking…" : "Say what hurts, or ask about your medicines"} disabled={busy} autoComplete="off" />
+        <input id="ask" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={PLACEHOLDER[lang][phase]} disabled={busy} autoComplete="off" />
         <div className="chips">
-          {SUGGESTIONS.map((s) => (
+          {SUGGESTIONS[lang].map((s) => (
             <button key={s.say} type="button" className="chip" onClick={() => void handle(s.say)} disabled={busy} title={s.say}>
               {s.label}
             </button>
           ))}
+        </div>
+        <div className="lang" role="group" aria-label="Language">
+          <button type="button" aria-pressed={lang === "en"} onClick={() => setSettings({ ...settings, language: "en" })}>EN</button>
+          <button type="button" aria-pressed={lang === "hi"} onClick={() => setSettings({ ...settings, language: "hi" })} lang="hi">हिं</button>
         </div>
         <button type="submit" className="send" disabled={busy || !typed.trim()} aria-label="Send">
           <PaperPlaneRight size={18} weight="fill" />

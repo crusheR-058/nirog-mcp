@@ -1,14 +1,16 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { nextQuestion, type AriaResult } from "../ai/aria.js";
+import type { ConverseFn, ConverseTurn } from "../ai/converse.js";
+import { audit } from "../audit.js";
+import { consentDenial, type ConsentScope } from "../auth/consent.js";
+import { REGION_LABELS } from "../clinical/regions.js";
+import { triage, type TriageLevel } from "../clinical/triage.js";
 import type { NirogData } from "../data/types.js";
+import { langInput, T, type Lang } from "../i18n.js";
 import type { Embedder } from "../memory/embed.js";
 import { recallSentence, remember, shortWhen } from "../memory/recall.js";
 import type { MemoryStore } from "../memory/types.js";
-import { REGION_LABELS } from "../clinical/regions.js";
-import { nextQuestion, type AriaResult } from "../ai/aria.js";
-import type { ConverseFn, ConverseTurn } from "../ai/converse.js";
-import { triage, type TriageLevel } from "../clinical/triage.js";
-import { consentDenial, type ConsentScope } from "../auth/consent.js";
 
 export interface IntakeResult {
   patient: { id: string; name: string };
@@ -20,20 +22,22 @@ export interface IntakeResult {
   aria: (AriaResult & { model: string }) | { error: string };
   /** Rules-based triage of this complaint. When not routine, call report_red_flag to escalate. */
   triage: { level: TriageLevel; matched: string[] };
+  language: Lang;
   spoken: string;
 }
 
 export async function runIntake(
   deps: { data: NirogData; store: MemoryStore; embedder: Embedder; converse?: ConverseFn | null },
-  input: { patientId: string; complaint: string; transcript?: ConverseTurn[]; now?: Date },
+  input: { patientId: string; complaint: string; transcript?: ConverseTurn[]; now?: Date; lang?: Lang },
 ): Promise<IntakeResult | { error: string }> {
   const patient = await deps.data.getPatient(input.patientId);
   if (!patient) return { error: `No patient with id ${input.patientId}.` };
   const now = input.now ?? new Date();
+  const lang = input.lang ?? "en";
 
   const r = await remember({ store: deps.store, embedder: deps.embedder }, { patientId: input.patientId, text: input.complaint, now });
   const flag = r.flags[0] ?? null;
-  const recallLine = recallSentence(r, now);
+  const recallLine = recallSentence(r, now, lang);
 
   const recurrenceText = flag ? `${flag.level}: ${flag.visitCount} visits about the ${REGION_LABELS[flag.region].toLowerCase()} in ${flag.spanDays} days` : null;
   const turns: ConverseTurn[] = [...(input.transcript ?? []), { role: "user", text: input.complaint.trim() }];
@@ -48,6 +52,7 @@ export async function runIntake(
         recallLine,
         region: REGION_LABELS[r.region.region],
         recurrence: recurrenceText,
+        lang,
       },
       turns,
       deps.converse,
@@ -58,12 +63,19 @@ export async function runIntake(
 
   // Recall is spoken once, on the opening turn; later turns carry it in the data only.
   const openingTurn = !input.transcript || input.transcript.length === 0;
-  const ariaLine = "reply" in aria ? aria.reply : "I could not reach the intake assistant, but your complaint is recorded and a doctor will see it.";
-  const t = triage(input.complaint, patient.conditions);
+  const ariaLine = "reply" in aria ? aria.reply : T.ariaUnreachable(lang);
+  const t = triage(input.complaint, patient.conditions, lang);
   const spoken =
     t.level === "emergency"
-      ? `${t.advice} I am escalating this now.`
+      ? `${t.advice} ${T.escalating(lang)}`
       : [openingTurn ? recallLine : null, ariaLine].filter(Boolean).join(" ");
+
+  await audit(
+    deps.data,
+    "Called start_intake",
+    patient.fullName,
+    `${REGION_LABELS[r.region.region]} · triage ${t.level}${flag ? ` · ${flag.level}` : ""}${r.degraded ? " · memory unreachable" : ""}`,
+  );
 
   return {
     patient: { id: patient.id, name: patient.fullName },
@@ -73,13 +85,14 @@ export async function runIntake(
       regionSource: r.region.source,
       inheritedFrom: r.region.inheritedFromText ?? null,
     },
-    recall: r.matches.map((m) => ({ text: m.rawText, when: shortWhen(m.occurredAt, now), distance: Number(m.distance.toFixed(3)) })),
+    recall: r.matches.map((m) => ({ text: m.rawText, when: shortWhen(m.occurredAt, now, lang), distance: Number(m.distance.toFixed(3)) })),
     recurrence: flag
       ? { level: flag.level, region: REGION_LABELS[flag.region], visitCount: flag.visitCount, spanDays: flag.spanDays, rule: flag.rule }
       : null,
     memory: { degraded: r.degraded, reason: r.degradedReason, embedProvider: r.embedProvider, latencyMs: r.latencyMs },
     aria,
     triage: { level: t.level, matched: t.matched.map((m) => m.id) },
+    language: lang,
     spoken,
   };
 }
@@ -103,18 +116,23 @@ export function registerIntakeTool(
         "there is no history. Call this whenever a patient describes or elaborates on a symptom.",
       inputSchema: {
         patient_id: z.string().describe("Nirog patient id, e.g. pat_rahul"),
-        complaint: z.string().min(3).max(1000).describe("Exactly what the patient said, unedited"),
+        complaint: z.string().min(3).max(1000).describe("Exactly what the patient said, unedited, in whatever language they said it"),
         transcript: z
           .array(z.object({ role: z.enum(["user", "assistant"]), text: z.string().max(2000) }))
           .max(40)
           .optional()
           .describe("Earlier turns of this intake conversation, oldest first, not including `complaint`"),
+        language: langInput,
       },
     },
-    async ({ patient_id, complaint, transcript }) => {
-      const denied = consentDenial(scope, patient_id);
-      if (denied) return { isError: true, content: [{ type: "text", text: denied }] };
-      const result = await runIntake(deps, { patientId: patient_id, complaint, transcript, now: now() });
+    async ({ patient_id, complaint, transcript, language }) => {
+      const lang: Lang = language ?? "en";
+      const denied = consentDenial(scope, patient_id, lang);
+      if (denied) {
+        await audit(deps.data, "Refused start_intake", patient_id, "No consent for this patient on this device");
+        return { isError: true, content: [{ type: "text", text: denied }] };
+      }
+      const result = await runIntake(deps, { patientId: patient_id, complaint, transcript, now: now(), lang });
       if ("error" in result) return { isError: true, content: [{ type: "text", text: result.error }] };
       return { content: [{ type: "text", text: JSON.stringify(result) }] };
     },

@@ -133,7 +133,7 @@ function Rig() {
     // The sphere sits centre on the hero and Talk sections, and slides aside behind the data sections.
     // Hero: sphere right of the copy. Talk: sphere above the cards. Data sections: the cloud drifts aside.
     const tx = route === "doctor" ? 3.2 : section === 0 ? -3.1 : section === LAST ? 0 : 2.6;
-    const ty = route === "doctor" ? -1.2 : section === LAST ? -2.3 : 0;
+    const ty = route === "doctor" ? -1.2 : section === LAST ? -3.1 : 0;
     camera.position.x += (tx + pointer.current.x * 0.25 - camera.position.x) * 0.03;
     camera.position.y += (ty + pointer.current.y * 0.15 - camera.position.y) * 0.03;
     camera.lookAt(0, 0.1, 0);

@@ -5,10 +5,11 @@
  * The model conducts the conversation. It never writes the chart: the region,
  * recall, and recurrence flag come from deterministic code and are handed to the
  * model as context, and anything the model says about red flags is advisory
- * until the rules-based triage (Day 5) confirms it.
+ * until the rules-based triage confirms it.
  */
 
 import { z } from "zod";
+import { T, type Lang } from "../i18n.js";
 import { converseText, extractJson, type ConverseFn, type ConverseTurn } from "./converse.js";
 
 export const QUESTION_BUDGET = 3;
@@ -22,6 +23,8 @@ export interface AriaContext {
   recallLine: string | null;
   region: string;
   recurrence: string | null;
+  /** Language ARIA speaks to the patient in. The summary for the doctor is always English. */
+  lang?: Lang;
 }
 
 export const ariaResultSchema = z.object({
@@ -37,7 +40,11 @@ export function ariaSystemPrompt(ctx: AriaContext, questionsAsked: number): stri
   return [
     `You are ARIA, a warm, professional clinical intake nurse for Nirog, a telehealth service for rural India. You are speaking through a voice assistant, so no markdown, no lists, no emoji, one or two short sentences per reply.`,
     ``,
-    `Your job is a structured intake, NOT a diagnosis. Never name a probable condition, never prescribe. Gather what a doctor needs: onset, duration, character, what makes it better or worse, severity, associated symptoms. One question at a time.`,
+    `Your job is a structured intake, NOT a diagnosis. Never name a probable condition, never prescribe. Gather what a doctor needs: onset, duration, character, what makes it better or worse, severity, associated symptoms. Ask exactly ONE question per reply, never two joined together. Never ask for something the patient has already told you in this conversation.`,
+    ``,
+    ctx.lang === "hi"
+      ? `LANGUAGE: the patient is speaking Hindi. Write "reply" in simple everyday Hindi, in Devanagari script, the way a village nurse would speak. Write "summary" and the flags in English, because the doctor reads those.`
+      : `LANGUAGE: reply in simple English.`,
     ``,
     `RED FLAGS: if anything suggests an emergency (chest pain with sweating or breathlessness, signs of stroke, severe bleeding, anaphylaxis, suicidal intent, a very sick infant), set redFlag true, add a flag {id, label, advice}, and calmly tell them to seek emergency care now.`,
     ``,
@@ -54,27 +61,25 @@ export function ariaSystemPrompt(ctx: AriaContext, questionsAsked: number): stri
   ].join("\n");
 }
 
+/** Counts questions in either script: "?" ends an English question, and Hindi ones too. */
 export function countQuestions(turns: ConverseTurn[]): number {
   return turns.filter((t) => t.role === "assistant" && t.text.includes("?")).length;
 }
 
 /** Deterministic stand-in when no model is configured (tests, offline demos). */
 export function offlineAria(ctx: AriaContext, turns: ConverseTurn[]): AriaResult {
+  const lang = ctx.lang ?? "en";
   const asked = countQuestions(turns);
   if (asked >= QUESTION_BUDGET) {
     return {
-      reply: "Thank you. I am sending this to the doctor along with your history.",
+      reply: T.offlineHandover(lang),
       complete: true,
       summary: `Patient reported a ${ctx.region.toLowerCase()} complaint.${ctx.recurrence ? ` ${ctx.recurrence}.` : ""}`,
       redFlag: false,
       flags: [],
     };
   }
-  const questions = [
-    "How long has this been going on this time?",
-    "Is it getting worse, staying the same, or getting better?",
-    "Is anything else bothering you along with it?",
-  ];
+  const questions = T.offlineQuestions(lang);
   return { reply: questions[asked] ?? questions[0], complete: false, summary: null, redFlag: false, flags: [] };
 }
 

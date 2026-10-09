@@ -51,13 +51,49 @@ export interface ConsultRequest {
   now: Date;
 }
 
-/** Contract the MCP tools depend on. Implemented by mock and Supabase sources. */
+/** A consult waiting in the on-call pool, as the doctor portal reads it. */
+export interface ConsultRecord {
+  id: string;
+  patientId: string;
+  triage: "emergency" | "urgent" | "routine";
+  reason: string;
+  at: string; // ISO
+}
+
+/** One line of the trust log: who did what to whom, and why. */
+export interface AuditRecord {
+  id: string;
+  actorName: string;
+  action: string;
+  target: string;
+  reason?: string;
+  at: string; // ISO
+}
+
+export interface DoseRecord {
+  id: string;
+  patientId: string;
+  drug: string;
+  slot: string;
+  takenAt: string; // ISO
+}
+
+/** Contract the MCP tools and the clinic API depend on. Implemented by mock and Supabase sources. */
 export interface NirogData {
   getPatient(patientId: string): Promise<PatientRecord | null>;
+  listPatients(): Promise<PatientRecord[]>;
   /** Most recent completed encounter, which is the active care plan. */
   getLatestEncounter(patientId: string): Promise<EncounterRecord | null>;
   /** Put the patient in the on-call doctor's queue. Returns the queue entry id. */
   requestConsult(req: ConsultRequest): Promise<string>;
+  /** Consults waiting in the on-call pool, newest first. */
+  listConsults(): Promise<ConsultRecord[]>;
   /** Notify the patient's family contact. Returns a description of who was told, or null if nobody is on file. */
   alertCaregiver(req: { patientId: string; level: "emergency" | "urgent"; message: string }): Promise<string | null>;
+  /** Append to the trust log. Never edited, never deleted. */
+  recordAudit(e: { actorName: string; action: string; target: string; reason?: string }): Promise<void>;
+  listAudit(limit: number): Promise<AuditRecord[]>;
+  /** Record that a dose was taken. Returns the record id. */
+  logDose(d: { patientId: string; drug: string; slot: string; takenAt: Date }): Promise<string>;
+  listDoses(patientId: string, since: Date): Promise<DoseRecord[]>;
 }

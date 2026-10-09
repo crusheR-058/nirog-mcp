@@ -33,7 +33,9 @@ function Stat({ label, value, unit, icon, tone, sub }: { label: string; value: s
 
 /* ── Dashboard ────────────────────────────────────────────────────────────── */
 function Dashboard() {
-  const { queue, onCall, setOnCall, startConsult, openChart, audit, addAudit } = useDemo();
+  const { queue, onCall, setOnCall, startConsult, openChart, addAudit } = useDemo();
+  const audit = useDemo((s) => (s.live ? s.serverAudit : s.audit));
+  const live = useDemo((s) => s.live);
   const [, tick] = useState(0);
   useEffect(() => { const t = setInterval(() => tick((x) => x + 1), 20000); return () => clearInterval(t); }, []);
   const waiting = queue.filter((q) => q.state === "waiting");
@@ -109,8 +111,8 @@ function Dashboard() {
           </ol>
         </div>
         <aside className="glass card trustlog">
-          <div className="card-head"><span className="eyebrow"><ShieldCheck size={14} weight="duotone" /> Trust log</span><span className="muted small">Immutable · who / what / why</span></div>
-          <TrustList events={audit.slice(0, 6)} />
+          <div className="card-head"><span className="eyebrow"><ShieldCheck size={14} weight="duotone" /> Trust log</span><span className={`status ${live ? "ok" : ""}`}><i className="dot" />{live ? "live from server" : "this tab only"}</span></div>
+          <TrustList events={audit.slice(0, 7)} />
         </aside>
       </div>
     </div>
@@ -337,7 +339,7 @@ function Consult() {
 
 /* ── Trust log ────────────────────────────────────────────────────────────── */
 function Trust() {
-  const audit = useDemo((s) => s.audit);
+  const audit = useDemo((s) => (s.live ? s.serverAudit : s.audit));
   return (
     <div className="portal-page">
       <div className="portal-greet"><h3><ShieldCheck size={22} weight="duotone" /> Trust log</h3><p className="muted">The client requests, the server decides, and records it. This is the accountable access trail behind every record in Nirog.</p></div>

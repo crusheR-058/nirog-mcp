@@ -5,12 +5,14 @@ export interface Settings {
   endpoint: string;
   token: string;
   patientId: string;
+  /** The language the patient speaks and hears. Sent to every tool. */
+  language: "en" | "hi";
 }
 
 const KEY = "nirog-demo-settings";
 
 export function loadSettings(): Settings {
-  const defaults: Settings = { endpoint: `${location.origin}/mcp`, token: "", patientId: "pat_rahul" };
+  const defaults: Settings = { endpoint: `${location.origin}/mcp`, token: "", patientId: "pat_rahul", language: "en" };
   try {
     return { ...defaults, ...JSON.parse(localStorage.getItem(KEY) ?? "{}") };
   } catch {
