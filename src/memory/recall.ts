@@ -27,6 +27,8 @@ export const MEMORY_TIMEOUT_MS = 2500;
 
 export interface RememberResult {
   complaintId: string | null;
+  /** The visit this sentence belongs to: one per consultation, shared by every turn of it. Null when memory was unreachable. */
+  visitId: string | null;
   region: ResolvedRegion;
   matches: RecallMatch[];
   history: ComplaintRecord[];
@@ -67,19 +69,25 @@ export async function remember(
 
   let matches: RecallMatch[] = [];
   let history: ComplaintRecord[] = [];
+  let visitId: string | null = null;
   let degraded = false;
   let degradedReason: string | undefined;
 
   try {
     await withTimeout(async () => {
+      const visit = await deps.store.currentVisit(input.patientId, now);
+      visitId = visit;
       if (vector) {
-        matches = await deps.store.search({
+        const found = await deps.store.search({
           patientId: input.patientId,
           embedding: vector,
-          limit: 5,
+          limit: 8,
           threshold: recallThresholdFor(embedProvider),
           before: now,
         });
+        // Memory is about earlier visits. What the patient said two minutes ago in this same consultation is not a
+        // recollection, and reading it back to them as one ("yesterday you told me...") would be absurd.
+        matches = found.filter((m) => m.visitId !== visit).slice(0, 5);
       }
       history = await deps.store.history(input.patientId);
     }, MEMORY_TIMEOUT_MS);
@@ -91,9 +99,8 @@ export async function remember(
   const region = resolveRegion(text, matches, inheritThresholdFor(embedProvider));
 
   let complaintId: string | null = null;
-  if (!degraded) {
+  if (!degraded && visitId) {
     try {
-      const visitId = await deps.store.currentVisit(input.patientId, now);
       complaintId = await deps.store.insertComplaint({
         patientId: input.patientId,
         visitId,
@@ -114,7 +121,7 @@ export async function remember(
 
   const flags = degraded ? [] : detectAll(history, now);
 
-  return { complaintId, region, matches, history, flags, embedProvider, degraded, degradedReason, latencyMs: Date.now() - started };
+  return { complaintId, visitId, region, matches, history, flags, embedProvider, degraded, degradedReason, latencyMs: Date.now() - started };
 }
 
 export { shortWhen };
@@ -136,7 +143,8 @@ export function recallSentence(r: RememberResult, now: Date, lang: Lang = "en"):
     const prev = flag.complaints.filter((c) => c.occurredAt < now).at(-1);
     if (prev) return T.recallWatch(lang, { region: flag.region, when: shortWhen(prev.occurredAt, now, lang) });
   }
-  const closest = r.matches[0];
+  // A sentence that named nothing ("no, that's all") is not worth reminding anyone of.
+  const closest = r.matches.find((m) => m.bodyRegion !== "unknown");
   if (closest) return T.recallClosest(lang, { when: shortWhen(closest.occurredAt, now, lang), text: closest.rawText });
   return null;
 }

@@ -27,7 +27,7 @@ export function MemoryGraph() {
   return (
     <section className="memory" id="memory" aria-label="Memory">
       <header className="section-head">
-        <p className="eyebrow">Memory · pgvector + Titan embeddings</p>
+        <p className="eyebrow">Memory · linked by meaning, not by words</p>
         <h2>Nobody describes the same ache the same way twice.</h2>
         <p className="lede">Three sentences with no shared words. Memory links them by meaning, and names the body region the last sentence never did.</p>
       </header>
@@ -116,6 +116,7 @@ export function MemoryGraph() {
             <div><dt>Counts toward</dt><dd>{active.region === "Lower back" ? "recurrent: 3 visits in 38 days" : "nothing"}</dd></div>
           </dl>
           <p className="muted small">The flag is arithmetic a doctor can check on paper. The embeddings only decide which complaints are about the same thing.</p>
+          <p className="muted small">Distances here are from the offline embedder the demo runs on. On Titan Embed v2 the same two links measure 0.652 and 0.805, inside its 0.85 threshold.</p>
         </aside>
       </div>
     </section>

@@ -4,7 +4,7 @@ import { nextQuestion, type AriaResult } from "../ai/aria.js";
 import type { ConverseFn, ConverseTurn } from "../ai/converse.js";
 import { audit } from "../audit.js";
 import { consentDenial, type ConsentScope } from "../auth/consent.js";
-import { REGION_LABELS } from "../clinical/regions.js";
+import { classify, REGION_LABELS, type Region } from "../clinical/regions.js";
 import { triage, type TriageLevel } from "../clinical/triage.js";
 import type { NirogData } from "../data/types.js";
 import { langInput, T, type Lang } from "../i18n.js";
@@ -18,12 +18,42 @@ export interface IntakeResult {
   recall: Array<{ text: string; when: string; distance: number }>;
   recurrence: { level: string; region: string; visitCount: number; spanDays: number; rule: string } | null;
   memory: { degraded: boolean; reason?: string; embedProvider: string; latencyMs: number };
-  /** ARIA's next question or handover line. `complete` means the intake is ready for a doctor. */
+  /**
+   * ARIA's next question or handover line. `complete` means the intake is ready for a doctor, and `summary` is then
+   * the handover: the patient's exact words plus what the rules found. It is assembled by code, never by the model.
+   */
   aria: (AriaResult & { model: string }) | { error: string };
   /** Rules-based triage of this complaint. When not routine, call report_red_flag to escalate. */
   triage: { level: TriageLevel; matched: string[] };
   language: Lang;
   spoken: string;
+}
+
+/**
+ * The handover a doctor reads. Every part of it is either a verbatim quote or the output of a rule, so nothing can
+ * appear here that the patient did not say or that a rule did not find.
+ */
+export function handoverSummary(p: {
+  said: string[];
+  region: string;
+  regionSource: string;
+  recurrence: { level: string; visitCount: number; spanDays: number } | null;
+  triage: TriageLevel;
+  memoryDegraded: boolean;
+}): string {
+  const quotes = p.said.slice(-6).map((s) => `"${s.trim()}"`).join("; ");
+  const parts = [
+    `Said today: ${quotes}.`,
+    `Region: ${p.region}${p.regionSource === "inherited" ? " (not named today; taken from an earlier complaint)" : p.regionSource === "none" ? " (not named, and nothing similar on record)" : ""}.`,
+    p.memoryDegraded
+      ? "Pattern: NOT CHECKED. The patient's history could not be reached."
+      : p.recurrence
+        ? `Pattern: ${p.recurrence.level}, ${p.recurrence.visitCount} visits in ${p.recurrence.spanDays} days.`
+        : "Pattern: none found in the recorded history.",
+    `Triage: ${p.triage}.`,
+    "Assembled by rules from the patient's own words. Not a diagnosis.",
+  ];
+  return parts.join(" ");
 }
 
 export async function runIntake(
@@ -39,6 +69,12 @@ export async function runIntake(
   const flag = r.flags[0] ?? null;
   const recallLine = recallSentence(r, now, lang);
 
+  // The region of the visit, not of the last sentence. An intake usually ends on something like "no, nothing else",
+  // and a handover that called a back complaint "Unclassified" because of it would be worse than no handover.
+  const anchor = r.history.filter((c) => c.visitId === r.visitId).find((c) => c.bodyRegion !== "unknown");
+  const visitRegion: Region = anchor?.bodyRegion ?? r.region.region;
+  const visitSource = anchor ? (classify(anchor.rawText).region === "unknown" ? "inherited" : "lexicon") : r.region.source;
+
   const recurrenceText = flag ? `${flag.level}: ${flag.visitCount} visits about the ${REGION_LABELS[flag.region].toLowerCase()} in ${flag.spanDays} days` : null;
   const turns: ConverseTurn[] = [...(input.transcript ?? []), { role: "user", text: input.complaint.trim() }];
   let aria: IntakeResult["aria"];
@@ -50,7 +86,7 @@ export async function runIntake(
         allergies: patient.allergies,
         currentMedications: patient.currentMedications,
         recallLine,
-        region: REGION_LABELS[r.region.region],
+        region: REGION_LABELS[visitRegion],
         recurrence: recurrenceText,
         lang,
       },
@@ -59,22 +95,48 @@ export async function runIntake(
     );
   } catch (err) {
     aria = { error: err instanceof Error ? err.message : String(err) };
+    console.error("[aria] no usable answer:", aria.error.slice(0, 300));
   }
 
   // Recall is spoken once, on the opening turn; later turns carry it in the data only.
   const openingTurn = !input.transcript || input.transcript.length === 0;
   const ariaLine = "reply" in aria ? aria.reply : T.ariaUnreachable(lang);
   const t = triage(input.complaint, patient.conditions, lang);
+
+  // When memory has something to ask ("...Is this the same thing?"), that is the question for this turn. The model is
+  // still consulted, because its red-flag vote counts on every turn, but its own question waits: nobody should be
+  // asked two things at once by a voice.
+  const recallAsks = openingTurn && Boolean(recallLine) && !r.degraded;
+  if (recallAsks && "reply" in aria && !aria.redFlag) aria = { ...aria, reply: recallLine!, complete: false };
+
+  if ("reply" in aria) {
+    aria = {
+      ...aria,
+      summary: aria.complete
+        ? handoverSummary({
+            said: turns.filter((x) => x.role === "user").map((x) => x.text),
+            region: REGION_LABELS[visitRegion],
+            regionSource: visitSource,
+            recurrence: flag ? { level: flag.level, visitCount: flag.visitCount, spanDays: flag.spanDays } : null,
+            triage: t.level,
+            memoryDegraded: r.degraded,
+          })
+        : null,
+    };
+  }
+  const said = "reply" in aria ? aria.reply : ariaLine;
   const spoken =
     t.level === "emergency"
       ? `${t.advice} ${T.escalating(lang)}`
-      : [openingTurn ? recallLine : null, ariaLine].filter(Boolean).join(" ");
+      : said === recallLine
+        ? said
+        : [openingTurn ? recallLine : null, said].filter(Boolean).join(" ");
 
   await audit(
     deps.data,
     "Called start_intake",
     patient.fullName,
-    `${REGION_LABELS[r.region.region]} · triage ${t.level}${flag ? ` · ${flag.level}` : ""}${r.degraded ? " · memory unreachable" : ""}`,
+    `${REGION_LABELS[visitRegion]} · triage ${t.level}${flag ? ` · ${flag.level}` : ""}${r.degraded ? " · memory unreachable" : ""}`,
   );
 
   return {

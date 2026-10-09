@@ -81,3 +81,28 @@ hackathon; this MCP server and Agent Skill are new.
   verification (registration number + clinic invite code against an allowlist), signed 30-day doctor session,
   remembered on the device, sign-out. /auth/config, /auth/doctor/session, /auth/doctor/verify routes.
   Portal window shows the signed-in doctor; verification and sign-in are written to the trust log.
+
+## 2026-10-09
+- Two new tools: `log_dose_taken` (with a double-dose guard counted on the clinic's clock) and
+  `get_family_summary` (counts and patterns, never the patient's words). Six tools in all.
+- Hindi: every spoken line in English and Hindi (`src/i18n.ts`); Devanagari and romanised terms in the lexicon;
+  Hindi patterns in all the emergency rules, with post-noun negation; spelling folded before matching
+  (`src/clinical/normalize.ts`). `language` parameter on every tool.
+- Trust log on the server: every tool call, refusal, queued consult and alert is recorded with who, what, why.
+- `/api/clinic`: the doctor portal reads the queue and the trust log from the server, guarded by the doctor
+  session. A consult escalated by voice in one browser appears in the doctor's queue in another.
+- Dry runs against the real model found and fixed four things:
+  - the model wrote the doctor's summary and invented a symptom. The handover is now assembled by code from
+    verbatim quotes, and the model's summary is discarded;
+  - "reply with JSON" drifted into prose. ARIA now answers through a forced Bedrock tool call;
+  - the model handed over after one question. The two-question minimum is enforced in code;
+  - the handover took its region from the last sentence only ("no, nothing else" became "Unclassified"). It now
+    uses the region of the visit. Complaints from the same visit are no longer recalled as memories;
+  - the opening turn asked memory's question and the model's together. It now asks only memory's;
+  - the model sometimes kept asking past three questions. The budget is enforced in code: after three, hand over.
+- Measured: 12 intakes (6 English, 6 Hindi), 42 tool calls, 0 errors; 419 ms best, 632 ms median, 1,113 ms
+  worst. Every intake handed over after 2 or 3 questions. One spoken line still joined two questions with
+  "and". An earlier run of 44 calls had one turn with no usable model answer; the built-in question covered it
+  and the cause was not found. Titan Embed v2 distances recorded, including the cross-language limit.
+- Demo: EN/Hindi toggle, five things to try, live trust log and queue. README rewritten. SKILL.md covers all
+  five clinical tools. `SUBMISSION/` holds the Devpost text, product feedback, AWS notes and the video script.

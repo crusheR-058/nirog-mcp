@@ -1,6 +1,6 @@
 {
   "name": "nirog-mcp",
-  "version": "1.0.0",
+  "version": "0.2.0",
   "description": "MCP server and Agent Skill bringing Nirog telehealth intake to Alexa+",
   "main": "dist/http.js",
   "scripts": {

@@ -81,7 +81,11 @@ describe("tools answer in Hindi", () => {
     expect(r.recurrence).toMatchObject({ level: "recurrent", visitCount: 3 });
     expect(r.spoken).toContain("3 बार कमर की तकलीफ़");
     expect(r.spoken).toContain("कमर में दर्द है"); // the first complaint, quoted as said
-    expect(r.spoken).toContain("कब से"); // ARIA's offline question, in Hindi
+    expect(r.spoken.endsWith("क्या यह वही तकलीफ़ है?")).toBe(true); // memory's question, and only that one
+
+    const next = await runIntake(deps, { patientId: "pat_meena", complaint: "हाँ वही है", transcript: [{ role: "user", text: "कमर में फिर से दर्द हो रहा है" }, { role: "assistant", text: r.spoken }], now: new Date(NOW.getTime() + 60_000), lang: "hi" });
+    if ("error" in next) throw new Error(next.error);
+    expect(next.spoken).toContain("बढ़ रहा है"); // ARIA's next question, in Hindi
   });
 
   it("report_red_flag speaks the 108 advice in Hindi and still queues the consult", async () => {

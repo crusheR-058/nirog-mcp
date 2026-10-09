@@ -2,6 +2,12 @@
  * Chat completion on Amazon Bedrock. Ported from Nirog (src/lib/ai/converse.ts).
  * Uses the default AWS credential chain. gpt-oss emits reasoning blocks before
  * the answer; those never leave this module.
+ *
+ * Structured answers come back through a forced tool call, not through a "reply
+ * with JSON" instruction. We tried the instruction first. It held until the
+ * transcript contained a long plain-prose assistant turn, and then the model
+ * began answering in prose too, sometimes playing out several turns at once.
+ * A tool call is a contract; a sentence in a prompt is a request.
  */
 
 export const CHAT_MODEL = process.env.BEDROCK_CHAT_MODEL ?? "openai.gpt-oss-120b-1:0";
@@ -11,12 +17,21 @@ export interface ConverseTurn {
   text: string;
 }
 
+/** A tool the model must call. Its input, as JSON text, becomes the return value of the call. */
+export interface AnswerTool {
+  name: string;
+  description: string;
+  /** JSON Schema for the tool input. */
+  inputSchema: Record<string, unknown>;
+}
+
 export interface ConverseOptions {
   system: string;
   turns: ConverseTurn[];
   maxTokens?: number;
   temperature?: number;
   reasoningEffort?: "low" | "medium" | "high";
+  tool?: AnswerTool;
 }
 
 export type ConverseFn = (opts: ConverseOptions) => Promise<string>;
@@ -41,10 +56,26 @@ export async function converseText(opts: ConverseOptions): Promise<string> {
       messages,
       inferenceConfig: { maxTokens: opts.maxTokens ?? 800, temperature: opts.temperature ?? 0.4 },
       additionalModelRequestFields: { reasoning_effort: opts.reasoningEffort ?? "low" },
+      ...(opts.tool
+        ? {
+            toolConfig: {
+              tools: [{ toolSpec: { name: opts.tool.name, description: opts.tool.description, inputSchema: { json: opts.tool.inputSchema } } }],
+              toolChoice: { tool: { name: opts.tool.name } },
+            } as never,
+          }
+        : {}),
     }),
   );
 
-  const text = (res.output?.message?.content ?? [])
+  const blocks = res.output?.message?.content ?? [];
+  if (opts.tool) {
+    for (const b of blocks) {
+      if ("toolUse" in b && b.toolUse?.name === opts.tool.name) return JSON.stringify(b.toolUse.input ?? {});
+    }
+    // No tool call despite the forced choice: fall through and let the caller try to read the text.
+  }
+
+  const text = blocks
     .map((b) => ("text" in b ? b.text : null))
     .filter((t): t is string => typeof t === "string" && t.length > 0)
     .join("\n")

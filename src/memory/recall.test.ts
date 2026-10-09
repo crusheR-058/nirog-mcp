@@ -66,6 +66,17 @@ describe("remember", () => {
     expect(recallSentence(r, NOW)).toContain("can't get to your records");
   });
 
+  it("does not recall what was said earlier in the same visit", async () => {
+    const store = new InMemoryStore();
+    const deps = { store, embedder: offlineEmbedder };
+    await remember(deps, { patientId: "pat_meena", text: "my lower back hurts", now: NOW });
+    const r = await remember(deps, { patientId: "pat_meena", text: "my lower back is really aching", now: new Date(NOW.getTime() + 60_000) });
+    expect(r.matches).toEqual([]); // same consultation: not a memory
+    expect(recallSentence(r, NOW)).toBeNull();
+    const later = await remember(deps, { patientId: "pat_meena", text: "my lower back is aching again", now: new Date(NOW.getTime() + 5 * 86_400_000) });
+    expect(later.matches.length).toBe(2); // a new visit remembers both
+  });
+
   it("seed covers the demo script", () => {
     expect(DEMO_HISTORY.filter((h) => h.patientId === "pat_rahul")).toHaveLength(3);
   });
