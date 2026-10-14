@@ -3,7 +3,8 @@
 #   bash deploy/iam.sh
 # Creates two roles:
 #   NirogAppRunnerECRAccessRole  lets App Runner pull the image from ECR
-#   NirogMcpInstanceRole         lets the running service call Bedrock (and nothing else)
+#   NirogMcpInstanceRole         lets the running service call Bedrock and Polly speech (and nothing else)
+# Safe to rerun.
 set -euo pipefail
 
 tmp=$(mktemp -d)
@@ -16,7 +17,9 @@ cat > "$tmp/tasks-trust.json" <<'EOF'
 {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"tasks.apprunner.amazonaws.com"},"Action":"sts:AssumeRole"}]}
 EOF
 cat > "$tmp/bedrock.json" <<'EOF'
-{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["bedrock:InvokeModel","bedrock:InvokeModelWithResponseStream","bedrock:Converse","bedrock:ConverseStream"],"Resource":"*"}]}
+{"Version":"2012-10-17","Statement":[
+  {"Effect":"Allow","Action":["bedrock:InvokeModel","bedrock:InvokeModelWithResponseStream","bedrock:Converse","bedrock:ConverseStream"],"Resource":"*"},
+  {"Effect":"Allow","Action":["polly:SynthesizeSpeech"],"Resource":"*"}]}
 EOF
 
 if ! aws iam get-role --role-name NirogAppRunnerECRAccessRole >/dev/null 2>&1; then
@@ -32,12 +35,13 @@ fi
 if ! aws iam get-role --role-name NirogMcpInstanceRole >/dev/null 2>&1; then
   aws iam create-role --role-name NirogMcpInstanceRole \
     --assume-role-policy-document "$(f tasks-trust.json)" --query Role.Arn --output text
-  aws iam put-role-policy --role-name NirogMcpInstanceRole --policy-name BedrockInvoke \
-    --policy-document "$(f bedrock.json)"
   echo "created NirogMcpInstanceRole"
 else
   echo "NirogMcpInstanceRole exists"
 fi
+# Applied on every run, so adding a permission here reaches an existing role.
+aws iam put-role-policy --role-name NirogMcpInstanceRole --policy-name BedrockInvoke --policy-document "$(f bedrock.json)"
+echo "NirogMcpInstanceRole may call Bedrock and Polly"
 
 rm -rf "$tmp"
 echo "done. Now: bash deploy/apprunner.sh"

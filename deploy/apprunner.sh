@@ -25,7 +25,7 @@ INSTANCE_ROLE=$(aws iam get-role --role-name NirogMcpInstanceRole --query Role.A
 # Runtime configuration, forwarded from .env by name. With the Supabase lines from `pnpm db:migrate` set, the service
 # uses the live clinic; PUBLIC_DEMO=1 opens the fictional demo household to visitors (see src/auth/routes.ts).
 env_json=$(node -e '
-const keys = ["NIROG_TOKEN_SECRET","MEMORY_STORE","MEMORY_DATABASE_URL","MEMORY_PG_FLAVOUR","NIROG_DATA_SOURCE","SUPABASE_URL","SUPABASE_SERVICE_KEY","BEDROCK_CHAT_MODEL","BEDROCK_EMBED_MODEL","PUBLIC_DEMO","GOOGLE_CLIENT_ID","CLINIC_INVITE_CODE","DOCTOR_ALLOWLIST","CLINIC_UTC_OFFSET_MINUTES"];
+const keys = ["NIROG_TOKEN_SECRET","MEMORY_STORE","MEMORY_DATABASE_URL","MEMORY_PG_FLAVOUR","NIROG_DATA_SOURCE","SUPABASE_URL","SUPABASE_SERVICE_KEY","BEDROCK_CHAT_MODEL","BEDROCK_EMBED_MODEL","PUBLIC_DEMO","GOOGLE_CLIENT_ID","CLINIC_INVITE_CODE","DOCTOR_ALLOWLIST","CLINIC_UTC_OFFSET_MINUTES","BEDROCK_AGENT_MODEL","BEDROCK_AGENT_MODELS","POLLY_VOICE"];
 const env = { AWS_REGION: process.env.AWS_REGION, EMBEDDER: "bedrock", HOST: "0.0.0.0", PORT: "8080" };
 for (const k of keys) if (process.env[k]) env[k] = process.env[k];
 console.log(JSON.stringify(env));')
