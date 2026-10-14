@@ -126,6 +126,16 @@ using something, we say so rather than guess.
    this reason. Guidance on cross-lingual thresholds, or a note that romanised Indic text embeds poorly, would
    have saved us the experiment.
 
+6. **Amazon Nova as the router, and a quota we met first.** Nova Lite (APAC) routed 26 of 26 labelled utterances
+   in English, Hindi and romanised Hindi to the right tool, at 833 ms median, which is excellent. Two things got in
+   the way. Fired back to back, 11 of 78 calls on a new account came back "Too many requests" even though the
+   SDK retried; nothing in the console said what the request quota was or how close we were. And with
+   `toolChoice: auto`, Nova sometimes answered a request in its own words instead of calling the tool: asked
+   "I took my Ibuprofen" a second time, it said "you have already taken it today, do not take another dose." That
+   happened to be right, but it bypassed the tool that records the dose and logs the refusal. We now let the
+   model speak its own words only for small talk. A documented way to say "tool or nothing" without forcing one
+   named tool would help agents like this one.
+
 **What would help most**
 
 - In the "on-demand throughput isn't supported" error, list the inference profile IDs that contain the model in
@@ -133,11 +143,39 @@ using something, we say so rather than guess.
 - A prominent line in the Converse docs: structured output means a forced tool call.
 - A short cross-lingual note on the Titan Embeddings model card, with Indic scripts and romanised text called
   out.
+- Show the account's current Bedrock request quota per model, and the remaining headroom, next to the model in
+  the console, so a throttled demo is not a guessing game.
+- A `toolChoice` mode for Converse meaning "call one of these tools, or say nothing," between `auto` and forcing
+  a single named tool.
+
+## Amazon Polly
+
+**What worked.** The neural voice **Kajal** speaks Indian English and Hindi, so one voice carries a conversation
+that switches language mid-sentence, which is exactly how families in Uttar Pradesh talk. `SynthesizeSpeech`
+returned a short line in well under a second from `ap-south-1`, and the audio replaced the browser's speech
+engine, which on many computers has no Hindi voice at all.
+
+**What got in the way.** Only one neural voice covers Indian English, so the narrator in our video had to be a
+US voice. Polly has no way to ask "which voices can read this mixed English and Devanagari text," so we found
+Kajal by listing voices and reading `AdditionalLanguageCodes`. A second Indian neural voice, and a note in the
+voice list about code-mixed text, would help.
 
 ## Amazon ECR and AWS App Runner
 
-We built the container and pushed it to ECR in `ap-south-1` without trouble. **We have not yet created the App
-Runner service**, so we have no feedback on running it. The one thing we can report is from writing the
-deployment script: an image-based App Runner service needs two IAM roles created beforehand, an access role
-for ECR and an instance role for Bedrock, and nothing in the create flow offers to make them. A
-`--create-roles` option, or a single documented command, would turn a three-step deployment into one.
+The service has run since 14 October 2026 at https://j2fkpyar4b.ap-south-1.awsapprunner.com, and redeploys
+took about five minutes each.
+
+**What worked.** An image in ECR became an HTTPS service with a health check and no load balancer to configure.
+Updating it was one `update-service` call.
+
+**What got in the way.**
+
+1. An image-based service needs two IAM roles created beforehand, an access role for ECR and an instance role for
+   the service's own AWS calls, and nothing in the create flow offers to make them. A `--create-roles` option, or a
+   single documented command, would turn a three-step deployment into one.
+2. Our deployment script failed under Git Bash on Windows: the AWS CLI could not open the `/tmp/...` path that
+   `mktemp` returns for `--assume-role-policy-document file://...`, and the error ("No such file or directory")
+   did not hint that the path style was the problem.
+3. Behind App Runner every request appears to come from the proxy. Our per-address rate limit treated all visitors
+   as one until we told Express to trust one proxy hop. A line in the App Runner docs about `X-Forwarded-For`
+   would save the next person a puzzling outage.

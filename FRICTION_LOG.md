@@ -39,6 +39,18 @@ what we tried, what happened, what would have helped.
 - **AWS CLI on Windows.** `--assume-role-policy-document file:///tmp/...` fails under Git Bash: the Windows CLI
   cannot open the POSIX temp path that `mktemp` returns ("No such file or directory"). `deploy/iam.sh` now converts
   the path with `cygpath`. Nothing in the error points at the path style.
+- **Amazon Bedrock quotas, new account.** Running a 26-case routing evaluation back to back on Nova Lite (APAC),
+  11 calls came back "Too many requests" despite SDK retries. The quota was not visible anywhere we looked. We
+  added a model chain (Nova Lite, Nova 2 Lite, Nova Pro, each with its own quota), adaptive retries, and a pattern
+  router for when none answers.
+- **Amazon Nova with `toolChoice: auto`.** Sometimes answered in prose instead of calling the tool, including a
+  medical instruction ("do not take another dose") given from conversation memory. We now allow model prose only for
+  small talk.
+- **App Runner and client addresses.** Every request looked like it came from App Runner's proxy until Express was
+  set to trust one hop; the per-address rate limit would otherwise have throttled all visitors together.
+- **Headless Chrome and WebGL.** Recording the demo, software rendering of the Three.js scene held the page at about
+  6 captured frames a second and slowed the whole story; `--use-angle=d3d11 --enable-gpu` in headless mode used the
+  real GPU and gave 30.
 - **Supabase Management API.** Creating a project, reading the pooler string and the keys all worked by API with a
   personal token. The pooler endpoint returns only the transaction-mode string (port 6543); the session-mode
   string a migration needs (port 5432) has to be derived by hand.
