@@ -1,4 +1,5 @@
-import { setSpeechRate } from "../speech";
+import { consentHeader } from "../mcp";
+import { setSpeechRate, stopSpeaking } from "../speech";
 import { refreshLive, useDemo } from "../store";
 
 /**
@@ -75,12 +76,23 @@ async function ask(text: string, signal: AbortSignal) {
 const language = (lang: "en" | "hi") => document.querySelectorAll<HTMLButtonElement>(".lang button")[lang === "en" ? 0 : 1]?.click();
 const handedOver = () => useDemo.getState().traces.some((t) => t.summary?.some((s) => s.startsWith("handover saved for the doctor")));
 
+let run = 0;
+
 export async function playStory(onBeat: (i: number) => void, signal: AbortSignal): Promise<void> {
+  const mine = ++run;
   setSpeechRate(1.2);
   try {
     await play(onBeat, signal);
   } finally {
-    setSpeechRate(1);
+    // A stopped or failed story leaves the page as a visitor would expect it, unless a newer run has taken over.
+    if (mine === run) {
+      setSpeechRate(1);
+      if (signal.aborted) stopSpeaking();
+      language("en");
+      const ask = $<HTMLInputElement>("#ask");
+      if (ask && !ask.disabled && ask.value) setValue(ask, "");
+      document.querySelectorAll(".story-focus").forEach((el) => el.classList.remove("story-focus"));
+    }
   }
 }
 
@@ -89,7 +101,8 @@ async function play(onBeat: (i: number) => void, signal: AbortSignal): Promise<v
 
   onBeat(0);
   // A reset in the last minute answers 429; the clinic is fresh either way. Off the public demo there is nothing to reset.
-  await fetch(`${location.origin}/auth/demo/reset`, { method: "POST" }).catch(() => undefined);
+  await fetch(`${location.origin}/auth/demo/reset`, { method: "POST", headers: await consentHeader(), signal }).catch(() => undefined);
+  if (signal.aborted) return;
   store().reset();
   language("en");
   const patient = $<HTMLSelectElement>("#talk select");

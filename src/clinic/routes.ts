@@ -58,7 +58,8 @@ export function clinicRoutes(): Router {
       const [patients, consults, auditLog, clinic] = await Promise.all([data.listPatients(), data.listConsults(), data.listAudit(40), data.clinicSnapshot()]);
       res.json({ at: new Date().toISOString(), patients, consults, audit: auditLog, clinic });
     } catch (e) {
-      res.status(503).json({ error: e instanceof Error ? e.message : String(e) });
+      console.error("[clinic]", e instanceof Error ? e.message : String(e));
+      res.status(503).json({ error: "The clinic record could not be reached just now." });
     }
   });
 
@@ -89,7 +90,8 @@ export function clinicRoutes(): Router {
       await audit(data, "Started consult", patient?.fullName ?? patientId, undefined, doctor?.name ?? "Doctor (dev mode)");
       res.json({ ok: true });
     } catch (e) {
-      res.status(503).json({ error: e instanceof Error ? e.message : String(e) });
+      console.error("[clinic]", e instanceof Error ? e.message : String(e));
+      res.status(503).json({ error: "The clinic record could not be reached just now." });
     }
   });
 
@@ -128,7 +130,8 @@ export function clinicRoutes(): Router {
         res.status(409).json({ error: e.message });
         return;
       }
-      res.status(503).json({ error: e instanceof Error ? e.message : String(e) });
+      console.error("[clinic]", e instanceof Error ? e.message : String(e));
+      res.status(503).json({ error: "The clinic record could not be reached just now." });
     }
   });
 

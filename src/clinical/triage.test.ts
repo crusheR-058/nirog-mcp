@@ -9,10 +9,15 @@ describe("triage", () => {
   });
 
   it("hears chest pain the way people say it, not only the way notes write it", () => {
-    for (const said of ["my chest hurts and I am sweating", "there is pain in my chest and I feel breathless", "my chest feels tight and I can't catch my breath", "छाती दुख रही है और पसीना आ रहा है"]) {
+    for (const said of [
+      "my chest hurts and I am sweating", "there is pain in my chest and I feel breathless", "my chest feels tight and I can't catch my breath",
+      "my chest is very tight and I am sweating", "my chest has been hurting and I feel sick and nauseous", "pressure on my chest and pain in my left arm",
+      "छाती दुख रही है और पसीना आ रहा है", "सीने में बहुत दर्द है और पसीना आ रहा है", "seene me bahut dard hai aur paseena",
+    ]) {
       expect(triage(said, [], said.match(/[ऀ-ॿ]/) ? "hi" : "en").level, said).toBe("emergency");
     }
     expect(triage("no pain in my chest, just sweating from the heat", []).level).toBe("routine");
+    expect(triage("my chest hurts a little, I went to the pharmacy", []).level).toBe("routine"); // "pharmacy" is not "arm"
   });
 
   it("does not fire on negated symptoms", () => {

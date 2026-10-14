@@ -108,7 +108,8 @@ export async function runIntake(
   // Recall is spoken once, on the opening turn; later turns carry it in the data only.
   const openingTurn = !input.transcript || input.transcript.length === 0;
   const ariaLine = "reply" in aria ? aria.reply : T.ariaUnreachable(lang);
-  const t = triage(input.complaint, patient.conditions, lang);
+  // The rules read everything the patient has said in this intake: "my chest hurts", then "yes, sweating", is one emergency.
+  const t = triage(turns.filter((x) => x.role === "user").map((x) => x.text).join(". "), patient.conditions, lang);
 
   // When memory has something to ask ("...Is this the same thing?"), that is the question for this turn. The model is
   // still consulted, because its red-flag vote counts on every turn, but its own question waits: nobody should be

@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { Play, Stop, X } from "@phosphor-icons/react";
+import { stopSpeaking } from "../speech";
 import { BEATS, playStory } from "./story";
 
 type StoryState = { beat: number; error?: string; done?: boolean } | null;
@@ -24,6 +25,7 @@ export function useStory() {
 
   const stop = useCallback(() => {
     abort.current?.abort();
+    stopSpeaking();
     setStory(null);
   }, []);
 

@@ -32,8 +32,8 @@ export const TRIAGE_RULES: TriageRule[] = [
     id: "chest_pain_acs", level: "emergency", label: "Chest pain with sweating, breathlessness, or arm or jaw pain",
     all: [
       // "my chest hurts" and "pain in my chest" are how people say it; "chest pain" is how notes say it.
-      /chest (is |feels )?(pain|tight|press|heav|hurt|ach|sore|discomfort)|(pain|ache|tightness|pressure|heaviness) in (my |the |his |her )?chest|(सीने|सीना|छाती) में (दर्द|जकडन|भारीपन|दबाव)|(सीना|छाती) (दुख|भारी|जकड)|(seene|seena|chhati|chati) (me|mein|main) (dard|jakdan)/,
-      /(sweat|breath|arm|jaw|nause)|पसीना|पसीने|सांस|बांह|जबड|उल्टी|घबराहट|paseena|pasina|saans/,
+      /chest (is |feels |has been |keeps )?(\w+ )?(pain|tight|press|heav|hurt|ach|sore|discomfort)|(pain|ache|tightness|pressure|heaviness) (in|on|across) (my |the |his |her )?(\w+ )?chest|(सीने|सीना|छाती) में (\S+ ){0,2}(दर्द|जकडन|भारीपन|दबाव)|(सीना|छाती) (\S+ )?(दुख|भारी|जकड)|(seene|seena|chhati|chati) (me|mein|main) (\S+ ){0,2}(dard|jakdan)/,
+      /(sweat|breath|\barms?\b|jaw|nause)|पसीना|पसीने|सांस|बांह|जबड|उल्टी|घबराहट|paseena|pasina|saans/,
     ],
   },
   {

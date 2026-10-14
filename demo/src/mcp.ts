@@ -34,17 +34,25 @@ export interface DemoAccess {
 }
 
 let demo: Promise<DemoAccess | null> | null = null;
+let demoAt = 0;
 /**
  * On the public demo deployment the server hands out a short-lived consent token for the demo household and a demo
- * doctor session. Anywhere else /auth/demo is a 404 and this is null. Fetched once per page load, never stored.
+ * doctor session. Anywhere else /auth/demo is a 404 and this is null. Kept in memory only; a failure is not kept, so
+ * the next call tries again, and the grant is renewed well before its six hours run out.
  */
 export function demoAccess(): Promise<DemoAccess | null> {
+  if (demo && Date.now() - demoAt > 5 * 3600_000) demo = null;
+  demoAt = demo ? demoAt : Date.now();
   // Ask only a server that wants tokens, so an open development server is not asked for something it does not have.
   demo ??= fetch(`${location.origin}/health`)
     .then((r) => (r.ok ? (r.json() as Promise<{ auth?: string }>) : null))
     .then((h) => (h?.auth === "consent-token" ? fetch(`${location.origin}/auth/demo`) : null))
     .then((r) => (r?.ok ? (r.json() as Promise<DemoAccess>) : null))
-    .catch(() => null);
+    .catch(() => null)
+    .then((grant) => {
+      if (!grant) demo = null;
+      return grant;
+    });
   return demo;
 }
 
@@ -66,7 +74,7 @@ export interface AgentReply {
   reply: string;
   level: "routine" | "urgent" | "emergency";
   steps: AgentStep[];
-  router: "model" | "patterns";
+  router: "model" | "patterns" | "rules";
   model: string | null;
   routeMs: number;
 }
@@ -77,7 +85,8 @@ export async function callAgent(
   body: { patientId: string; language: Settings["language"]; text: string; history: Array<{ role: "user" | "assistant"; text: string }>; transcript: Array<{ role: "user" | "assistant"; text: string }> },
 ): Promise<AgentReply | null> {
   try {
-    const r = await fetch(`${new URL(settings.endpoint).origin}/api/agent`, { method: "POST", headers: { "content-type": "application/json", ...(await consentHeader(settings)) }, body: JSON.stringify(body) });
+    // A stalled agent must not hold up a chest-pain turn: after this, the page escalates on its own.
+    const r = await fetch(`${new URL(settings.endpoint).origin}/api/agent`, { method: "POST", headers: { "content-type": "application/json", ...(await consentHeader(settings)) }, body: JSON.stringify(body), signal: AbortSignal.timeout(25_000) });
     return r.ok ? ((await r.json()) as AgentReply) : null;
   } catch {
     return null;

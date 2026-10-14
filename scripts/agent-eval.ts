@@ -61,10 +61,11 @@ for (const model of models) for (let run = 1; run <= runs; run++) {
       { scope: { kind: "all" }, route: bedrockRoute },
     );
     times.push(r.routeMs);
-    if (r.router !== "model") unanswered++;
+    if (r.router === "patterns") unanswered++;
     // Turns in a conversation are seconds apart; firing them back to back measures the quota, not the model.
     await new Promise((ok) => setTimeout(ok, Number(process.env.EVAL_PAUSE_MS ?? 1500)));
-    const chose = r.steps.filter((s) => s.by === "model").map((s) => s.tool);
+    // An emergency is escalated by the rules before any model is asked; that counts as the right routing.
+    const chose = r.steps.filter((s) => s.by === "model" || (r.router === "rules" && s.by === "guard")).map((s) => s.tool);
     const all = r.steps.map((s) => s.tool);
     const right = (tools: string[]) => (c.ok.length === 0 ? tools.length === 0 : tools.some((t) => c.ok.includes(t)));
     if (right(chose)) routed++;

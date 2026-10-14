@@ -97,13 +97,16 @@ export function useConversation() {
     fetch(url).then((r) => setHealth(r.ok ? "ok" : "bad")).catch(() => setHealth("bad"));
   }, [settings.endpoint]);
 
+  // Only the latest line may set the phase back to idle; an interrupted one just resolves.
+  const sayTicket = useRef(0);
   const say = useCallback(
     (text: string, level?: Level) =>
       new Promise<void>((resolve) => {
         addTurn({ role: "assistant", text, level });
         setPhase("speaking");
+        const mine = ++sayTicket.current;
         speak(text, () => {
-          setPhase("idle");
+          if (mine === sayTicket.current) setPhase("idle");
           resolve();
         }, language);
       }),
@@ -115,6 +118,8 @@ export function useConversation() {
       const text = utterance.trim();
       if (!text || phase === "thinking") return;
       setNotice(null);
+      // "Start over" empties the turns but not these refs: an intake that began past the end is over.
+      if (intakeFrom.current > turns.length) intakeOpen.current = false;
       addTurn({ role: "user", text });
       setPhase("thinking");
 
@@ -135,7 +140,7 @@ export function useConversation() {
         const local = !useDemo.getState().live;
         const chose = agent.steps.filter((s) => s.by !== "guard").map((s) => s.tool).join(" + ") || "no tool";
         const rid = addTrace({ tool: "alexa+ agent", args: { router: agent.router, model: agent.model } });
-        finishTrace(rid, { ms: agent.routeMs, summary: [agent.router === "model" ? `${agent.model} chose ${chose} from the MCP tool descriptions` : agent.model ? `${agent.model} chose no tool; patterns chose ${chose}` : `no model answered; patterns chose ${chose}`] });
+        finishTrace(rid, { ms: agent.routeMs, summary: [agent.router === "rules" ? (agent.steps.length ? "the triage rules flagged an emergency; no model was asked" : "no consent for this patient; nothing was read") : agent.router === "model" ? `${agent.model} chose ${chose} from the MCP tool descriptions` : agent.model ? `${agent.model} chose no tool; patterns chose ${chose}` : `no model answered; patterns chose ${chose}`] });
         for (const s of agent.steps) {
           const tid = addTrace({ tool: s.tool, args: s.args });
           finishTrace(tid, { ms: s.ms, error: s.error, summary: [...(s.by === "guard" ? ["called by the triage guard: the rules flagged these words"] : []), ...summarize(s.tool, s.result)] });

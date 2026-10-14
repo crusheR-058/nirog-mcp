@@ -64,6 +64,8 @@ if ("speechSynthesis" in window) speechSynthesis.onvoiceschanged = () => undefin
 /* The assistant's voice is Amazon Polly (Kajal, neural, Indian English and Hindi) from the server; the browser's own
    voice is the fallback, so a machine without a Hindi voice still hears Hindi. */
 let ticket = 0;
+/** Settles the line now playing, so an interrupted line still resolves whoever waits for it. */
+let settle: (() => void) | null = null;
 /** The story plays a little faster than conversation; anyone using the bar hears the natural pace. */
 let rate = 1;
 export const setSpeechRate = (r: number) => { rate = r; };
@@ -87,7 +89,10 @@ export function speak(text: string, onEnd?: () => void, language: Language = "en
       return;
     }
     // Stopped while the audio was on its way: never start a line the patient already interrupted.
-    if (mine !== ticket) return URL.revokeObjectURL(url);
+    if (mine !== ticket) {
+      URL.revokeObjectURL(url);
+      return onEnd?.();
+    }
     const audio = new Audio(url);
     audio.playbackRate = rate;
     playing = audio;
@@ -98,8 +103,10 @@ export function speak(text: string, onEnd?: () => void, language: Language = "en
       clearTimeout(guard);
       URL.revokeObjectURL(url);
       if (playing === audio) playing = null;
+      if (settle === finish) settle = null;
       onEnd?.();
     };
+    settle = finish;
     // A safety net for an "ended" event that never comes; once the real length is known, it is that plus a margin.
     let guard = setTimeout(finish, Math.max(4000, text.split(/\s+/).length * 600));
     audio.onloadedmetadata = () => {
@@ -113,7 +120,8 @@ export function speak(text: string, onEnd?: () => void, language: Language = "en
     audio.onerror = finish;
     // Autoplay can be refused (no gesture yet, headless): fall back to the browser voice for this line only.
     audio.play().catch(() => {
-      if (done) return;
+      // Interrupted while starting: the line is settled already and must not come back in another voice.
+      if (done || mine !== ticket) return finish();
       done = true;
       clearTimeout(guard);
       URL.revokeObjectURL(url);
@@ -149,5 +157,8 @@ export function stopSpeaking() {
   ticket++;
   playing?.pause();
   playing = null;
+  const s = settle;
+  settle = null;
+  s?.();
   if ("speechSynthesis" in window) speechSynthesis.cancel();
 }

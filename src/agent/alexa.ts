@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { ConverseTurn } from "../ai/converse.js";
-import type { ConsentScope } from "../auth/consent.js";
+import { consentDenial, type ConsentScope } from "../auth/consent.js";
 import { triage, type TriageLevel } from "../clinical/triage.js";
 import { getDataSource } from "../data/index.js";
 import type { Lang } from "../i18n.js";
@@ -59,8 +59,9 @@ export interface AgentReply {
   reply: string;
   level: TriageLevel;
   steps: AgentStep[];
-  /** What decided: the model, or the pattern router (no model answered, or the model chose no tool for more than small talk). */
-  router: "model" | "patterns";
+  /** What decided: the model; the pattern router (no model answered, or it chose no tool for more than small talk);
+   *  or the rules alone (an emergency, or no consent), with no model asked. */
+  router: "model" | "patterns" | "rules";
   model: string | null;
   routeMs: number;
 }
@@ -99,18 +100,23 @@ export const bedrockRoute: RouteFn = async (req) => {
     try {
       return { ...(await converseRoute(model, req)), model };
     } catch (e) {
+      // Busy, slow, not enabled in this account: whatever the reason, the next model gets the turn.
       last = e;
-      if (!BUSY.test(`${(e as { name?: string }).name ?? ""} ${e instanceof Error ? e.message : String(e)}`)) throw e;
-      console.warn(`[agent] ${model} is busy; trying the next model`);
+      console.warn(`[agent] ${model} did not answer (${(e as { name?: string }).name ?? "error"}); trying the next model`);
     }
   }
   throw last;
 };
 
+type Bedrock = import("@aws-sdk/client-bedrock-runtime").BedrockRuntimeClient;
+let bedrock: Promise<Bedrock> | null = null;
+// One client for the process, so connections and the adaptive retry state are reused across turns.
+const bedrockClient = () =>
+  (bedrock ??= import("@aws-sdk/client-bedrock-runtime").then((m) => new m.BedrockRuntimeClient({ region: process.env.AWS_REGION ?? "ap-south-1", maxAttempts: 2, retryMode: "adaptive" })));
+
 async function converseRoute(model: string, { system, turns, tools }: Parameters<RouteFn>[0]): Promise<{ text: string; toolUses: ToolUse[] }> {
-  const { BedrockRuntimeClient, ConverseCommand } = await import("@aws-sdk/client-bedrock-runtime");
-  // Adaptive retries absorb a short burst; a longer one moves on to the next model in the chain.
-  const client = new BedrockRuntimeClient({ region: process.env.AWS_REGION ?? "ap-south-1", maxAttempts: 2, retryMode: "adaptive" });
+  const { ConverseCommand } = await import("@aws-sdk/client-bedrock-runtime");
+  const client = await bedrockClient();
   const messages: { role: "user" | "assistant"; content: { text: string }[] }[] = [];
   for (const t of turns) {
     const last = messages[messages.length - 1];
@@ -126,6 +132,8 @@ async function converseRoute(model: string, { system, turns, tools }: Parameters
       inferenceConfig: { maxTokens: 400, temperature: 0 },
       toolConfig: { tools: tools.map((t) => ({ toolSpec: { name: t.name, description: t.description, inputSchema: { json: t.inputSchema } } })), toolChoice: { auto: {} } } as never,
     }),
+    // A voice turn cannot wait on a stalled model; the next one in the chain, or the patterns, take over.
+    { abortSignal: AbortSignal.timeout(8_000) },
   );
   const blocks = res.output?.message?.content ?? [];
   const toolUses: ToolUse[] = [];
@@ -139,11 +147,12 @@ async function converseRoute(model: string, { system, turns, tools }: Parameters
 }
 
 /* When no model answers: plain patterns, the same ones the demo page used before there was an agent. */
-const SYMPTOM = /pain|ache|hurt|fever|cough|dizzy|bleed|breath|vomit|sweat|faint|swell|swollen|rash|numb|दर्द|बुखार|सांस|साँस|खांसी|खाँसी|चक्कर|उल्टी|पसीना|बेहोश|तकलीफ़|तकलीफ|सूज|dard|bukhar|chakkar/i;
+const SYMPTOM = /pain|ache|hurt|fever|cough|dizzy|bleed|breath|vomit|sweat|faint|swell|swollen|rash|numb|chest|tight|सीन|छाती|seene|chhati|दर्द|बुखार|सांस|साँस|खांसी|खाँसी|चक्कर|उल्टी|पसीना|बेहोश|तकलीफ़|तकलीफ|सूज|dard|bukhar|chakkar/i;
 const DOSE = /\b(took|taken|had my|just had|have had)\b.*\b(medicines?|tablets?|pills?|dose|dawai|dawa|goli)\b|\b(dawai|dawa|goli)\b.*\b(le li|kha li|le liya|kha liya)\b|(दवा|दवाई|गोली)\s*(ले|खा)\s*(ली|लिया)/i;
 const SUMMARY = /\b(this week|past week|last week|summary)\b|\bhow (is|has|was|have) .{1,30}(doing|been)\b|इस हफ्ते|इस हफ़्ते|कैसे हैं|कैसी हैं|कैसे रहे|हाल कैसा/i;
 const CARE_PLAN = /\b(medicines?|tablets?|dawai|dose|pills?|tests?|follow[- ]?up|next visit|doctor next|what do i take)\b|कौन सी दवा|कौन-सी दवा|दवा कब|जाँच|जांच/i;
-const GREETING = /^\s*(hi|hello|hey|thanks?|thank you|good (morning|evening|night)|namaste|नमस्ते|धन्यवाद|शुक्रिया)\b[\s,.!]*([a-z]+[\s,.!]*)?$/i;
+// Greeting words only, so "hello, my chest hurts" is not small talk.
+const GREETING = /^\s*(hi|hello|hey|thanks?|thank you|good (morning|afternoon|evening|night)|namaste|नमस्ते|धन्यवाद|शुक्रिया)\b[\s,.!]*((hi|hello|hey|good|morning|afternoon|evening|night|there|aria|alexa|ji|thanks?|you|so|much|very)[\s,.!]*){0,4}$/i;
 
 export function patternRoute(text: string, medicines: string[] = []): ToolUse[] {
   // A symptom always wins: "I took my tablet but my chest still hurts" must reach triage, not the dose log.
@@ -174,14 +183,28 @@ async function conditionsOf(patientId: string): Promise<string[]> {
   }
 }
 
+/** What the patient hears when the clinic cannot be reached. Never a raw error: those can carry hostnames and ARNs. */
+const UNREACHABLE: Record<Lang, string> = {
+  en: "I can't reach the clinic record right now. If this feels serious, call 108 now.",
+  hi: "मैं अभी क्लिनिक के रिकॉर्ड तक नहीं पहुँच पा रही। अगर तकलीफ़ गंभीर लगे तो अभी 108 पर कॉल कीजिए।",
+};
+const LISTENING: Record<Lang, string> = {
+  en: "I'm listening. Tell me what's bothering you, or ask about your medicines.",
+  hi: "मैं सुन रही हूँ। बताइए क्या तकलीफ़ है, या अपनी दवाओं के बारे में पूछिए।",
+};
+
 export async function runAgent(input: AgentInput, deps: { scope: ConsentScope; route?: RouteFn }): Promise<AgentReply> {
+  // Consent first: no model call and no read of the record for a patient this household has not consented for.
+  const denied = consentDenial(deps.scope, input.patientId, input.language);
+  if (denied) return { reply: denied, level: "routine", steps: [], router: "rules", model: null, routeMs: 0 };
+
+  // The rules read the whole intake, not one sentence: "my chest hurts", then "yes, I'm sweating", is one emergency.
+  const said = [...input.transcript.filter((t) => t.role === "user").map((t) => t.text), input.text].join(". ");
+  const ruled = triage(said, await conditionsOf(input.patientId), input.language).level;
+
   const route = deps.route ?? bedrockRoute;
   const server = await createNirogServer(deps.scope);
-  const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
-  await server.connect(serverSide);
   const client = new Client({ name: "alexa-plus-simulator", version: SERVER_VERSION });
-  await client.connect(clientSide);
-
   const steps: AgentStep[] = [];
   const call = async (tool: string, args: Record<string, unknown>, by: AgentStep["by"]) => {
     const t0 = Date.now();
@@ -192,15 +215,19 @@ export async function runAgent(input: AgentInput, deps: { scope: ConsentScope; r
       try {
         parsed = JSON.parse(text);
       } catch {
-        /* a plain-text answer, e.g. a consent refusal */
+        /* a plain-text answer */
       }
       steps.push(r.isError ? { tool, args, error: text, ms: Date.now() - t0, by } : { tool, args, result: parsed, ms: Date.now() - t0, by });
     } catch (e) {
-      steps.push({ tool, args, error: e instanceof Error ? e.message : String(e), ms: Date.now() - t0, by });
+      console.error(`[agent] ${tool} failed:`, e instanceof Error ? e.message : String(e));
+      steps.push({ tool, args, error: "The tool could not be reached.", ms: Date.now() - t0, by });
     }
   };
 
   try {
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverSide);
+    await client.connect(clientSide);
     const tools = (await client.listTools()).tools
       .filter((t) => t.name !== "ping")
       .map((t) => {
@@ -210,56 +237,63 @@ export async function runAgent(input: AgentInput, deps: { scope: ConsentScope; r
     const known = new Set(tools.map((t) => t.name));
 
     const t0 = Date.now();
-    let decision: Awaited<ReturnType<RouteFn>>;
+    let decision: Awaited<ReturnType<RouteFn>> = { text: "", toolUses: [] };
     let router: AgentReply["router"] = "model";
-    try {
-      decision = await route({ system: systemPrompt(input.patientId, input.language), turns: [...input.history.slice(-8), { role: "user", text: input.text }], tools });
-    } catch (e) {
-      // No model answered. The patterns still route the turn, and the guard below still runs the rules.
-      console.error("[agent] routing failed, using patterns:", e instanceof Error ? e.message : String(e));
-      router = "patterns";
-      decision = { text: "", toolUses: patternRoute(input.text, await medicinesOf(input.patientId)) };
+    if (ruled === "emergency") {
+      // No model stands between an emergency and its advice: the guard below escalates at once.
+      router = "rules";
+    } else {
+      try {
+        decision = await route({ system: systemPrompt(input.patientId, input.language), turns: [...input.history.slice(-8), { role: "user", text: input.text }], tools });
+      } catch (e) {
+        // No model answered. The patterns still route the turn, and the guard below still runs the rules.
+        console.error("[agent] routing failed, using patterns:", e instanceof Error ? e.message : String(e));
+        router = "patterns";
+        decision = { text: "", toolUses: patternRoute(input.text, await medicinesOf(input.patientId)) };
+      }
     }
     const routeMs = Date.now() - t0;
 
+    // Only tools that exist, each once. A made-up tool name counts as no tool at all.
+    let uses = decision.toolUses.filter((u, i, all) => known.has(u.name) && all.findIndex((x) => x.name === u.name) === i).slice(0, 2);
     // The model may answer in its own words only for small talk. Anything else goes through a tool, so the wording
     // is reviewed and the trust log has it: a model once told a patient "do not take another dose" from memory alone.
-    if (router === "model" && decision.toolUses.length === 0) {
+    if (router === "model" && uses.length === 0) {
       const fallback = patternRoute(input.text, await medicinesOf(input.patientId));
       if (fallback.length) {
         router = "patterns";
-        decision = { ...decision, toolUses: fallback };
+        uses = fallback;
       }
     }
 
-    for (const use of decision.toolUses.filter((u) => known.has(u.name)).slice(0, 2)) {
+    for (const use of uses) {
       // The session's patient and language, always; the patient's own words for intake and triage.
       const args: Record<string, unknown> = { ...use.input, patient_id: input.patientId, language: input.language };
       if (use.name === "start_intake") Object.assign(args, { complaint: input.text, transcript: input.transcript });
-      if (use.name === "report_red_flag") args.symptoms = input.text;
-      await call(use.name, args, router);
+      if (use.name === "report_red_flag") args.symptoms = said;
+      await call(use.name, args, router === "rules" ? "guard" : router);
     }
 
-    // The guard: whatever the model chose, words the rules flag are escalated.
+    // The guard: whatever the model chose, words the rules flag are escalated, and escalation must have succeeded.
     const intake = steps.find((s) => s.tool === "start_intake");
     const ir = intake?.result as { triage?: { level: TriageLevel }; aria?: { redFlag?: boolean } } | undefined;
-    if (!steps.some((s) => s.tool === "report_red_flag")) {
-      const level = ir?.triage?.level ?? triage(input.text, await conditionsOf(input.patientId), input.language).level;
-      if (intake?.error || level !== "routine" || ir?.aria?.redFlag) {
-        await call("report_red_flag", { patient_id: input.patientId, symptoms: input.text, model_red_flag: Boolean(ir?.aria?.redFlag), language: input.language }, "guard");
-      }
+    const flagged = higher(ir?.triage?.level ?? "routine", ruled);
+    const escalate = Boolean(intake?.error) || flagged !== "routine" || Boolean(ir?.aria?.redFlag);
+    if (escalate && !steps.some((s) => s.tool === "report_red_flag" && s.result)) {
+      await call("report_red_flag", { patient_id: input.patientId, symptoms: said, model_red_flag: Boolean(ir?.aria?.redFlag), language: input.language }, "guard");
     }
 
     // What the patient hears: the tools' spoken lines. An emergency is the escalation's line alone.
     const rf = steps.find((s) => s.tool === "report_red_flag" && s.result) ?? null;
     const rfr = rf?.result as { level: TriageLevel; spoken: string } | undefined;
-    let level: TriageLevel = ir?.triage?.level ?? "routine";
-    if (rfr) level = higher(level, rfr.level);
-    const lines =
-      rfr?.level === "emergency"
-        ? [rfr.spoken]
-        : steps.map((s) => (s.result && typeof s.result === "object" ? (s.result as { spoken?: string }).spoken : s.error)).filter((x): x is string => Boolean(x));
-    const reply = [...new Set(lines)].join(" ").trim() || decision.text.slice(0, 300) || (input.language === "hi" ? "मैं सुन रही हूँ। बताइए क्या तकलीफ़ है, या अपनी दवाओं के बारे में पूछिए।" : "I'm listening. Tell me what's bothering you, or ask about your medicines.");
+    const level: TriageLevel = rfr ? higher(flagged, rfr.level) : flagged;
+    let reply: string;
+    if (escalate && !rfr) reply = UNREACHABLE[input.language];
+    else if (rfr?.level === "emergency") reply = rfr.spoken;
+    else {
+      const lines = steps.map((s) => (s.result && typeof s.result === "object" ? (s.result as { spoken?: string }).spoken : s.error ? UNREACHABLE[input.language] : undefined));
+      reply = [...new Set(lines.filter((x): x is string => Boolean(x)))].join(" ").trim() || decision.text.slice(0, 300) || LISTENING[input.language];
+    }
 
     return { reply, level, steps, router, model: decision.model ?? null, routeMs };
   } finally {

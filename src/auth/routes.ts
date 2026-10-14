@@ -4,7 +4,7 @@ import { getDataSource } from "../data/index.js";
 import { MOCK_PATIENTS } from "../data/mock.js";
 import { resetDemo } from "../demo-reset.js";
 import { findDoctor, GoogleAuthError, inviteCodeMatches, loadAllowlist, mintDoctorSession, sessionSecret, verifyDoctorSession, verifyGoogleIdToken } from "./doctor.js";
-import { mintToken } from "./tokens.js";
+import { mintToken, verifyToken } from "./tokens.js";
 
 /**
  * /auth routes for the doctor portal.
@@ -74,18 +74,31 @@ export function authRoutes(): Router {
 
   // Judges share one demo clinic. Each can start the story from the seeded state; a reset in the last minute counts.
   let lastReset = 0;
-  r.post("/demo/reset", async (_req: Request, res: Response) => {
-    if (!publicDemo || !process.env.NIROG_TOKEN_SECRET) return res.status(404).json({ error: "Not a public demo server." });
+  let resetting = false;
+  r.post("/demo/reset", async (req: Request, res: Response) => {
+    const secret = process.env.NIROG_TOKEN_SECRET;
+    if (!publicDemo || !secret) return res.status(404).json({ error: "Not a public demo server." });
+    // Only a holder of a demo consent token: the page has one, a drive-by script does not.
+    const token = (req.headers.authorization ?? "").replace(/^Bearer /, "");
+    try {
+      if (verifyToken(token, secret).sub !== "public-demo") throw new Error("not a demo token");
+    } catch {
+      return res.status(401).json({ error: "A demo consent token is required." });
+    }
     const wait = 60_000 - (Date.now() - lastReset);
-    if (wait > 0) return res.status(429).json({ error: "The demo was reset less than a minute ago.", retryInSeconds: Math.ceil(wait / 1000) });
+    if (resetting || wait > 0) return res.status(429).json({ error: "The demo was reset less than a minute ago.", retryInSeconds: Math.max(1, Math.ceil(wait / 1000)) });
+    resetting = true;
     lastReset = Date.now();
     try {
       await resetDemo();
       await audit(getDataSource(), "Reset the demo clinic", "Demo clinic", "Public demo: back to the seeded state", "Public demo visitor");
       res.json({ ok: true });
     } catch (e) {
-      lastReset = 0;
-      res.status(503).json({ error: e instanceof Error ? e.message : String(e) });
+      // The cooldown stands even on failure, so failed resets cannot be hammered.
+      console.error("[demo] reset failed:", e instanceof Error ? e.message : String(e));
+      res.status(503).json({ error: "The demo could not be reset just now." });
+    } finally {
+      resetting = false;
     }
   });
 
