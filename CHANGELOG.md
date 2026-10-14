@@ -106,3 +106,16 @@ hackathon; this MCP server and Agent Skill are new.
   and the cause was not found. Titan Embed v2 distances recorded, including the cross-language limit.
 - Demo: EN/Hindi toggle, five things to try, live trust log and queue. README rewritten. SKILL.md covers all
   five clinical tools. `SUBMISSION/` holds the Devpost text, product feedback, AWS notes and the video script.
+
+## 2026-10-14
+- New Supabase project `nirog-alexa` (Mumbai, ap-south-1), created for the hackathon. The server no longer reads
+  the old Nirog portal database.
+- Clinic schema in `supabase/migrations/0001_clinic.sql`: households with a family contact, patients, doctors,
+  ARIA handovers, the consult queue, encounters, doses (a real table, no longer audit rows) and the trust log.
+  Row-level security is on for every table with no policies, so the public key reads nothing; only the server's
+  service key gets in. The trust log is append-only in the database: updates, deletes and truncates raise.
+- `supabase/seed.sql`: the demo clinic. Rerunning `pnpm db:migrate` resets the seeded queue to today.
+- `src/data/supabase.ts` rewritten for the new schema. Caregiver alerts name the household's family contact.
+- `pnpm verify` now also checks the clinic data, that the public key is blocked, and that the trust log refuses
+  edits. Every tool was run over HTTP against the live database with Bedrock: intake recall (0.642 with Titan),
+  care plan in English and Hindi, dose logging, red flag with consult and family contact, family summary.

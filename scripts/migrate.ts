@@ -1,9 +1,11 @@
 /**
- * Create the memory tables on MEMORY_DATABASE_URL and seed the demo history.
- * Idempotent: tables use IF NOT EXISTS; the seed is skipped for a patient who already has complaints.
+ * Create the memory tables and the clinic schema on MEMORY_DATABASE_URL, seed the demo clinic,
+ * and seed the complaint history. Idempotent: rerun it to reset today's demo queue.
  *
  *   pnpm db:migrate
  */
+import { readFileSync } from "node:fs";
+import pg from "pg";
 import { PgStore, type PgFlavour } from "../src/memory/pg.js";
 import { embedderFromEnv, resilientEmbedder } from "../src/memory/embed.js";
 import { DEMO_HISTORY } from "../src/memory/index.js";
@@ -22,7 +24,18 @@ console.log(`memory: ${flavour} at ${new URL(url).host}`);
 console.log(`embedder: ${embedder.provider}`);
 
 await store.migrate();
-console.log("  ok  schema");
+console.log("  ok  memory schema");
+
+// The clinic tables are Postgres-only (pgvector flavour, i.e. Supabase); CockroachDB keeps memory only.
+if (flavour === "pgvector") {
+  const db = new pg.Client({ connectionString: url });
+  await db.connect();
+  for (const f of ["supabase/migrations/0001_clinic.sql", "supabase/seed.sql"]) {
+    await db.query(readFileSync(f, "utf8"));
+    console.log(`  ok  ${f}`);
+  }
+  await db.end();
+}
 
 const now = new Date();
 const patients = [...new Set(DEMO_HISTORY.map((h) => h.patientId))];

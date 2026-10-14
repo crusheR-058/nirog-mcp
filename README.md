@@ -87,13 +87,14 @@ Copy `.env.example` to `.env`. Everything is optional.
 | `MEMORY_STORE` | `memory` | `pg` stores complaints in Postgres at `MEMORY_DATABASE_URL` (`MEMORY_PG_FLAVOUR`: `pgvector` for Supabase, `cockroach` for CockroachDB). |
 | `EMBEDDER` | `offline` | `bedrock` uses Titan Text Embeddings V2 in `AWS_REGION`. |
 | `ARIA_MODEL` | Bedrock | `off` uses built-in questions. `BEDROCK_CHAT_MODEL` picks the model. |
-| `NIROG_DATA_SOURCE` | `mock` | `supabase` reads the Nirog doctor-portal schema (`SUPABASE_URL`, `SUPABASE_SERVICE_KEY`). |
+| `NIROG_DATA_SOURCE` | `mock` | `supabase` uses the clinic schema in `supabase/migrations/` (`SUPABASE_URL`, `SUPABASE_SERVICE_KEY`). |
 | `GOOGLE_CLIENT_ID` | unset | Enables Google sign-in on the doctor page. |
 | `CLINIC_INVITE_CODE`, `DOCTOR_ALLOWLIST` | demo values | One-time doctor verification. |
 | `CLINIC_UTC_OFFSET_MINUTES` | `330` (IST) | The clock doses are counted on. |
 
-For Postgres memory: `pnpm db:migrate` creates the tables and seeds the demo history, `pnpm verify` checks the
-connection and runs a live recall.
+For Supabase: `pnpm db:migrate` creates the memory and clinic tables, seeds the demo clinic and history, and
+resets today's queue when rerun. `pnpm verify` checks the connection, runs a live recall, reads the clinic data,
+and confirms the public key is blocked and the trust log refuses edits.
 
 ## Consent and sign-in
 
@@ -153,8 +154,6 @@ Stated plainly, because a clinical tool that overstates itself is worse than one
 - **The model sometimes asks two things at once.** The number of questions is enforced in code (two at least,
   three at most). Their wording is not: in our last run 1 of 38 model-written lines joined two questions with
   "and". One call in an earlier run of 44 returned no usable answer; the built-in question was spoken instead.
-- **The Supabase data source has not been run against a live database.** It is written against the Nirog
-  schema and typechecks. The built-in data source is what every test and demo uses.
 - **Alerts are recorded, not sent.** The family-contact alert writes a trust-log entry. There is no SMS gateway.
 - **The call room has no signalling server.** It captures your camera and microphone and shows the waiting
   state; there is no second peer.

@@ -1,7 +1,9 @@
 /**
- * Preflight: can we reach memory, and does recall work on the live database?
+ * Preflight: can we reach memory and the clinic data, does recall work, and are the locks on?
  *   pnpm verify
  */
+import pg from "pg";
+import { getDataSource } from "../src/data/index.js";
 import { PgStore, type PgFlavour } from "../src/memory/pg.js";
 import { embedderFromEnv, resilientEmbedder } from "../src/memory/embed.js";
 import { recallThresholdFor } from "../src/memory/recall.js";
@@ -31,6 +33,50 @@ else {
     bad(`connection failed: ${e instanceof Error ? e.message : String(e)}`);
   } finally {
     await store.close();
+  }
+}
+
+console.log("\nClinic data (Supabase)");
+if (process.env.NIROG_DATA_SOURCE !== "supabase") console.log("  skip  NIROG_DATA_SOURCE is not supabase");
+else {
+  try {
+    const data = getDataSource();
+    const patients = await data.listPatients();
+    if (patients.length) ok(`${patients.length} patients`);
+    else bad("no patients. Run: pnpm db:migrate");
+    const plan = await data.getLatestEncounter("pat_sunita");
+    if (plan?.prescriptions.length) ok(`care plan for pat_sunita: ${plan.prescriptions.map((p) => p.drug).join(", ")}`);
+    else bad("pat_sunita has no completed encounter");
+    ok(`${(await data.listConsults()).length} Alexa+ consults waiting, ${(await data.listAudit(500)).length} trust-log lines`);
+  } catch (e) {
+    bad(`data source: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  // The publishable key ships to browsers, so it must read nothing.
+  const anon = process.env.SUPABASE_ANON_KEY;
+  if (!anon) console.log("  skip  RLS check (set SUPABASE_ANON_KEY to run it)");
+  else {
+    const r = await fetch(`${process.env.SUPABASE_URL}/rest/v1/patient?select=id`, { headers: { apikey: anon, authorization: `Bearer ${anon}` } });
+    const rows = r.ok ? ((await r.json()) as unknown[]) : [];
+    if (rows.length === 0) ok(`anon key reads 0 patients (HTTP ${r.status}), RLS holds`);
+    else bad(`anon key read ${rows.length} patients: row-level security is off`);
+  }
+
+  if (url) {
+    const db = new pg.Client({ connectionString: url });
+    try {
+      await db.connect();
+      await db.query("BEGIN");
+      const { rows } = await db.query<{ id: string }>("INSERT INTO audit_event (actor_name, action, target) VALUES ('verify', 'verify', 'verify') RETURNING id");
+      await db.query("UPDATE audit_event SET reason = 'tampered' WHERE id = $1", [rows[0].id]);
+      bad("trust log accepted an edit");
+    } catch (e) {
+      if (String(e).includes("append-only")) ok("trust log refuses edits");
+      else bad(`append-only check: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      await db.query("ROLLBACK").catch(() => {});
+      await db.end();
+    }
   }
 }
 
