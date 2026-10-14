@@ -203,6 +203,8 @@ section { min-height: 100vh; min-height: 100dvh; padding: 120px 0 60px; scroll-m
 .talk { align-content: end; padding-bottom: 130px; }
 .talk .section-head { margin-bottom: 18px; }
 .talk-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(300px, 0.9fr); gap: 16px; }
+/* The sphere gathers behind Talk; these panels carry the words, so they are near-opaque and the sphere glows around them. */
+.convo-card, .trace-card { background: linear-gradient(160deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01)), rgba(8, 12, 19, 0.9); backdrop-filter: blur(30px) saturate(140%); }
 .convo { display: flex; flex-direction: column; gap: 12px; max-height: 44vh; overflow: auto; padding-right: 4px; }
 .turn { display: grid; gap: 4px; }
 .turn .who { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); }

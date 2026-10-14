@@ -114,5 +114,6 @@ cardClip(join(work, "intro.png"), join(work, "intro.mp3"), introD, join(work, "i
 cardClip(join(work, "outro.png"), join(work, "outro.mp3"), outroD, join(work, "outro.mp4"));
 
 ffmpeg(["-i", join(work, "intro.mp4"), "-i", join(work, "story.mp4"), "-i", join(work, "outro.mp4"),
-  "-filter_complex", "[0:v][0:a][1:v][1:a][2:v][2:a]concat=n=3:v=1:a=1[v][a]", "-map", "[v]", "-map", "[a]", ...enc, "-movflags", "+faststart", OUT]);
+  // Loudness to the level YouTube plays at, so the voice is neither faint nor clipped.
+  "-filter_complex", "[0:v][0:a][1:v][1:a][2:v][2:a]concat=n=3:v=1:a=1[v][c];[c]loudnorm=I=-16:TP=-1.5:LRA=11[a]", "-map", "[v]", "-map", "[a]", ...enc, "-movflags", "+faststart", OUT]);
 console.log(`wrote ${OUT}: ${probe(OUT).toFixed(1)} s`);
