@@ -20,8 +20,10 @@ export function route(text: string): "start_intake" | "log_dose_taken" | "get_fa
 
 /** Name a medicine only when the patient actually said one of theirs. The server asks rather than guesses otherwise. */
 function namedMedicine(text: string, patientId: string): string | undefined {
-  const meds = patientById(patientId)?.medications ?? [];
-  return meds.map((m) => m.split(" ")[0]).find((name) => text.toLowerCase().includes(name.toLowerCase()));
+  // The patient's recorded medicines and whatever the doctor prescribed since: a plan filed tonight counts at once.
+  const prescribed = useDemo.getState().encounters.filter((e) => e.patientId === patientId).flatMap((e) => e.prescriptions.map((r) => r.drug));
+  const meds = [...(patientById(patientId)?.medications ?? []).map((m) => m.split(" ")[0]), ...prescribed];
+  return meds.find((name) => text.toLowerCase().includes(name.toLowerCase()));
 }
 
 export function summarize(tool: string, r: unknown): string[] {

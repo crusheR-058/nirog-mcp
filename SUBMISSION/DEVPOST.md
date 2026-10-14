@@ -3,8 +3,6 @@
 > **Before you paste this:** fill in the three items marked `TODO`, and delete this note.
 >
 > - `TODO-VIDEO`: the YouTube link, once recorded (see DEMO_SCRIPT.md).
-> - `TODO-LIVE`: the App Runner URL, once `deploy/apprunner.sh` has run. If it is not deployed, delete the
->   "Try it" line that uses it. The local instructions are enough.
 > - `TODO-TEAM`: who built it.
 
 ---
@@ -50,8 +48,14 @@ back three times in the last 38 days. Five weeks ago you said 'my lower back has
 worse in the mornings.' Is this the same thing?"*
 
 **It asks like a nurse, then hands over.** ARIA, running on GPT-OSS 120B through Amazon Bedrock, asks two or
-three questions and never names a diagnosis. Then the doctor receives a handover with the recurrence flag on
-top. The model does not write that handover. Code does, from the patient's exact words.
+three questions and never names a diagnosis. Then the visit goes into the doctor's queue with a handover on top:
+the patient's exact words, the body region, the pattern, the triage level. The model does not write that
+handover. Code does. A complaint that keeps coming back is queued as urgent, and the handover says why.
+
+**The loop closes.** The doctor opens the consult with the handover beside the form. The medicines Rahul is
+still taking are already on it, so a new prescription cannot silently stop his blood-pressure tablet. The doctor
+files Ibuprofen; that evening Alexa+ reads him both medicines, because the plan the doctor just filed is the plan
+the voice tools read.
 
 **It escalates on rules, not on a model's mood.** Fifteen table-driven rules catch emergencies in English and
 Hindi. "I have chest pain and I'm sweating" gets the 108 ambulance advice in the same breath, an emergency
@@ -60,8 +64,9 @@ patient: wheezing is an emergency for someone with asthma and routine for anyone
 level. It can never lower one.
 
 **It keeps track of medicines.** `get_care_plan` reads out tonight's medicines. `log_dose_taken` records a dose
-and refuses a second one the same day: *"Amlodipine is already recorded for today. Please do not take an extra
-dose."*
+and refuses a double one: the same part of the day twice, two doses under four hours apart, or anything after
+today's are all taken. *"Ibuprofen 400mg was recorded at 7:42 pm, less than four hours ago. Please do not take
+another one now."*
 
 **It answers the family.** `get_family_summary` tells a daughter how her father's week went: how many complaints,
 whether a pattern is forming, how many doses were taken. It gives counts, never his words.
@@ -70,17 +75,19 @@ whether a pattern is forming, how many doses were taken. It gives counts, never 
 and romanised Hindi, including the fact that Hindi negates after the noun ("दर्द नहीं है") where English negates
 before it.
 
-**It shows its work.** Every tool call is written to a trust log: who, what, and why. The doctor's portal reads
-that log and the consult queue from the same server, so a consult escalated by voice in one room appears on the
-doctor's screen in another.
+**It shows its work.** Every tool call is written to a trust log: who, what, and why. The database itself refuses
+to edit or delete a line of it. The doctor's portal reads the log, the queue and the chart from the same server,
+so a consult raised by voice in one room appears on the doctor's screen in another.
 
 ## How we built it
 
 - **MCP server:** TypeScript, the official MCP SDK, stateless Streamable HTTP so it scales horizontally. Six
   tools with typed schemas. An Agent Skill (`skills/nirog/SKILL.md`) tells an agent how to run an intake with
   them.
-- **Memory:** embeddings stored beside the complaint they describe. An in-process store for demos and tests,
-  and a Postgres store whose recall query runs unchanged on Supabase pgvector and CockroachDB.
+- **Clinic record:** a Supabase project created for the hackathon (Mumbai): households, patients, doctors,
+  handovers, the consult queue, encounters, doses, the trust log, and complaint memory in pgvector. Row-level
+  security is on with no policies, so the public key reads nothing; only the server's key gets in. A trigger makes
+  the trust log append-only. `pnpm verify` proves all three against the live database.
 - **Amazon Bedrock:** GPT-OSS 120B via the Converse API, with a forced tool call for structured output, for
   ARIA's questions; Titan Text Embeddings V2 for recall. Both in `ap-south-1` (Mumbai), close to the patients.
   Over 42 real tool calls in 12 intakes the median took 632 ms.
@@ -91,9 +98,11 @@ doctor's screen in another.
   anyone else refuses without revealing whether that person exists. Doctors sign in with Google and verify
   their registration once.
 - **A simulated Alexa+ experience,** which the rules allow, since there is no Alexa+ sandbox: a web page with
-  speech in and out that is a real MCP client of the real server, beside a trace of every tool call.
-- **74 automated tests,** all offline, covering the rules, the Hindi handling, the double-dose guard, consent,
-  and the clinic API.
+  speech in and out that is a real MCP client of the real server, beside a trace of every tool call, and the
+  doctor's portal on the same record. On the deployment, a visitor gets a short-lived consent token for the
+  fictional demo household, so judges can use it with no Alexa+ account and no clinic login.
+- **80 automated tests,** all offline, covering the rules, the Hindi handling, the double-dose guards, consent,
+  the handovers, and the clinic API; plus an end-to-end run in a headless browser against Supabase and Bedrock.
 
 ## What was built during the hackathon, and what was not
 
@@ -104,7 +113,8 @@ Titan embedders, the SBAR handover builder, ARIA's intake prompt, and the demo p
 Everything else in this repository was written during the submission window, and its history starts on
 7 October 2026: the MCP server and all six tools, the Agent Skill, the triage rules, Hindi support, consent
 tokens, doctor sign-in, the dose and family-summary logic, the trust log and clinic API, the Postgres memory
-store, the deployment scripts, the tests, and the entire web page. CHANGELOG.md records it day by day.
+store, the Supabase schema and the closed care loop, the deployment scripts, the tests, and the entire web page.
+CHANGELOG.md records it day by day.
 
 ## Challenges we ran into
 
@@ -129,6 +139,13 @@ store, the deployment scripts, the tests, and the entire web page. CHANGELOG.md 
 - **A bug the demo found.** The recall sentence went missing whenever an intake followed a dose log, because
   unrelated turns were being sent as the intake's transcript. We only saw it by interrupting the assistant
   mid-sentence in a test, which is exactly what real people do.
+- **A new prescription stopped an old one.** In an end-to-end run, the doctor prescribed Ibuprofen for back pain
+  and Rahul's blood-pressure tablet vanished from what Alexa+ read him, because the newest encounter is the plan.
+  No unit test would have caught it. Medicines still running now start on the form, and the doctor removes what
+  they stop.
+- **"I took it" twice.** The first double-dose guard only refused once every slot was filled, so in the afternoon a
+  second "I took my Metformin" filled the night slot. Now two doses under four hours apart are refused whatever
+  the slots say.
 - **A model does not count.** "Ask two or three questions" produced one, and on other runs five. Both ends of
   that count are now enforced in code. One thing code cannot fully fix: about one line in forty still joins two
   questions with "and".
@@ -139,6 +156,8 @@ store, the deployment scripts, the tests, and the entire web page. CHANGELOG.md 
 - Nothing reaches the doctor that the patient did not say or a rule did not find.
 - When memory is unreachable, the assistant says so. It never turns an outage into "no history found."
 - The double-dose guard counts days on the clinic's clock, not the server's.
+- One record, two chairs: what the patient says to Alexa is what the doctor reads, and what the doctor files is
+  what Alexa says back.
 - The family summary answers the question a daughter is actually asking without repeating what her father said.
 
 ## What we learned
@@ -164,7 +183,7 @@ store, the deployment scripts, the tests, and the entire web page. CHANGELOG.md 
 ## Built with
 
 `typescript` `node.js` `model-context-protocol` `alexa` `amazon-bedrock` `amazon-ecr` `aws-app-runner`
-`postgresql` `pgvector` `supabase` `react` `three.js` `vite` `vitest`
+`postgresql` `pgvector` `supabase` `react` `three.js` `vite` `vitest` `playwright`
 
 ## Try it
 

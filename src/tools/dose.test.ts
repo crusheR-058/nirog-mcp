@@ -61,6 +61,16 @@ describe("log_dose_taken", () => {
     expect(data.doses).toHaveLength(1);
   });
 
+  it("refuses a second dose minutes later even when another slot is still open", async () => {
+    const data = new MockData();
+    expect(await runDose(data, { patientId: "pat_sunita", now: AFTERNOON })).toMatchObject({ logged: true, slot: "morning" });
+    const soon = await runDose(data, { patientId: "pat_sunita", now: new Date(AFTERNOON.getTime() + 10 * 60_000) });
+    if ("error" in soon) throw new Error(soon.error);
+    expect(soon).toMatchObject({ logged: false, reason: "already_taken", remainingToday: ["night"] });
+    expect(soon.spoken).toContain("recorded at 2:30 pm, less than four hours ago");
+    expect(data.doses).toHaveLength(1);
+  });
+
   it("asks which medicine when there are several, and matches a named one", async () => {
     const data = new MockData();
     const ask = await runDose(data, { patientId: "pat_lakshmi", now: AFTERNOON });

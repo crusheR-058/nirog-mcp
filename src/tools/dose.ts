@@ -9,6 +9,8 @@ import { buildCarePlan, type MedicationLine } from "./care-plan.js";
 /** The clinic's clock. Doses are counted per local day, not per UTC day. Default is IST. */
 const OFFSET_MS = Number(process.env.CLINIC_UTC_OFFSET_MINUTES ?? 330) * 60_000;
 const SCHEDULED = ["morning", "afternoon", "night"];
+/** No scheduled medicine here is due more often than this, so two doses closer together are a double dose. */
+const MIN_INTERVAL_MS = 4 * 3600_000;
 
 export function clinicClock(now: Date) {
   const local = new Date(now.getTime() + OFFSET_MS);
@@ -64,7 +66,8 @@ export async function runDose(data: NirogData, input: { patientId: string; medic
   const clock = clinicClock(now);
   const label = `${med.drug} ${med.strength ?? ""}`.trim();
   const slots = med.timesOfDay.filter((s) => SCHEDULED.includes(s));
-  const takenToday = (await data.listDoses(patient.id, clock.dayStart)).filter((d) => d.drug === med.drug).map((d) => d.slot);
+  const dosesToday = (await data.listDoses(patient.id, clock.dayStart)).filter((d) => d.drug === med.drug);
+  const takenToday = dosesToday.map((d) => d.slot);
 
   // "As needed" medicines have no schedule to check against, so they are simply recorded.
   if (slots.length === 0) {
@@ -85,6 +88,15 @@ export async function runDose(data: NirogData, input: { patientId: string; medic
   if (slots.includes(clock.period) && takenToday.includes(clock.period)) {
     await audit(data, "Refused duplicate dose", patient.fullName, `${label} · ${clock.period} dose already recorded`);
     return { patient: who, logged: false, reason: "already_taken", drug: med.drug, slot: clock.period, today: { expected: slots.length, taken: slots.length - remaining.length }, remainingToday: remaining, spoken: T.doseDuplicateSlot(lang, label, clock.period) };
+  }
+
+  // Minutes apart is a double dose whatever the slots say: in the afternoon a twice-daily medicine still has its night
+  // slot open, and "I took it" said twice must not fill it.
+  const last = dosesToday.map((d) => new Date(d.takenAt)).sort((a, b) => b.getTime() - a.getTime())[0];
+  if (last && now.getTime() - last.getTime() < MIN_INTERVAL_MS) {
+    const at = clinicClock(last).time;
+    await audit(data, "Refused duplicate dose", patient.fullName, `${label} · last dose at ${at}, under four hours ago`);
+    return { patient: who, logged: false, reason: "already_taken", drug: med.drug, slot: null, today: { expected: slots.length, taken: slots.length - remaining.length }, remainingToday: remaining, spoken: T.doseTooSoon(lang, label, at) };
   }
 
   const slot = remaining.includes(clock.period) ? clock.period : remaining[0];

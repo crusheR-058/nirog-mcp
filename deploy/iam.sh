@@ -7,6 +7,8 @@
 set -euo pipefail
 
 tmp=$(mktemp -d)
+# The Windows AWS CLI cannot open Git Bash paths like /tmp/...; hand it a Windows path when cygpath exists.
+f() { if command -v cygpath >/dev/null; then echo "file://$(cygpath -m "$tmp/$1")"; else echo "file://$tmp/$1"; fi; }
 cat > "$tmp/build-trust.json" <<'EOF'
 {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"build.apprunner.amazonaws.com"},"Action":"sts:AssumeRole"}]}
 EOF
@@ -19,7 +21,7 @@ EOF
 
 if ! aws iam get-role --role-name NirogAppRunnerECRAccessRole >/dev/null 2>&1; then
   aws iam create-role --role-name NirogAppRunnerECRAccessRole \
-    --assume-role-policy-document "file://$tmp/build-trust.json" --query Role.Arn --output text
+    --assume-role-policy-document "$(f build-trust.json)" --query Role.Arn --output text
   aws iam attach-role-policy --role-name NirogAppRunnerECRAccessRole \
     --policy-arn arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess
   echo "created NirogAppRunnerECRAccessRole"
@@ -29,9 +31,9 @@ fi
 
 if ! aws iam get-role --role-name NirogMcpInstanceRole >/dev/null 2>&1; then
   aws iam create-role --role-name NirogMcpInstanceRole \
-    --assume-role-policy-document "file://$tmp/tasks-trust.json" --query Role.Arn --output text
+    --assume-role-policy-document "$(f tasks-trust.json)" --query Role.Arn --output text
   aws iam put-role-policy --role-name NirogMcpInstanceRole --policy-name BedrockInvoke \
-    --policy-document "file://$tmp/bedrock.json"
+    --policy-document "$(f bedrock.json)"
   echo "created NirogMcpInstanceRole"
 else
   echo "NirogMcpInstanceRole exists"

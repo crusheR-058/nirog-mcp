@@ -35,4 +35,10 @@ what we tried, what happened, what would have helped.
 - **Alexa+ track.** Nothing says what conversation context Alexa+ passes to a tool. Our intake tool needs the
   earlier turns of this intake only; sending unrelated turns made the server skip the memory recall.
 - **App Runner.** An image-based service needs two IAM roles created first (ECR access, instance role). Not
-  offered by the create flow. We have not created the service yet.
+  offered by the create flow.
+- **AWS CLI on Windows.** `--assume-role-policy-document file:///tmp/...` fails under Git Bash: the Windows CLI
+  cannot open the POSIX temp path that `mktemp` returns ("No such file or directory"). `deploy/iam.sh` now converts
+  the path with `cygpath`. Nothing in the error points at the path style.
+- **Supabase Management API.** Creating a project, reading the pooler string and the keys all worked by API with a
+  personal token. The pooler endpoint returns only the transaction-mode string (port 6543); the session-mode
+  string a migration needs (port 5432) has to be derived by hand.

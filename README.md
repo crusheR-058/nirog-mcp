@@ -39,7 +39,7 @@ demo history, an offline embedder, and ARIA's questions from Amazon Bedrock if y
 (set `ARIA_MODEL=off` to use the built-in fallback questions instead).
 
 ```bash
-pnpm test           # 79 tests, offline, a few seconds
+pnpm test           # 80 tests, offline, a few seconds
 pnpm typecheck
 ```
 

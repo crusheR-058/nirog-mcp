@@ -136,3 +136,10 @@ hackathon; this MCP server and Agent Skill are new.
 - `pnpm db:reset -- --yes` clears what demo runs created and reseeds, for a clean recording.
 - 79 tests. Verified in headless Chromium against Supabase and Bedrock: voice intake to handover to queue, the doctor
   files a prescription, Alexa+ reads back both the new and the carried-forward medicine.
+- `log_dose_taken` also refuses two doses of the same medicine under four hours apart. In the afternoon a
+  twice-daily medicine still had its night slot open, so "I took it" said twice a minute apart filled it.
+- The demo page recognises a medicine the doctor prescribed tonight when the patient names it.
+- `deploy/iam.sh` works under Git Bash on Windows (the AWS CLI could not open `/tmp` paths). IAM roles created and
+  the service deployed to App Runner in ap-south-1 with the Supabase clinic and `PUBLIC_DEMO=1`.
+- SUBMISSION: the demo script is rebuilt around the closed loop; the Devpost text, friction log and README updated.
+
