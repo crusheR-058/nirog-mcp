@@ -15,6 +15,11 @@ const PORT = Number(process.env.PORT ?? 3333);
 const HOST = process.env.HOST ?? "127.0.0.1";
 
 const TOKEN_SECRET = process.env.NIROG_TOKEN_SECRET;
+if (process.env.PUBLIC_DEMO === "1" && !TOKEN_SECRET) {
+  // A public demo with no secret would be an open server, not a demo that hands out scoped tokens.
+  console.error("PUBLIC_DEMO=1 needs NIROG_TOKEN_SECRET. Refusing to start.");
+  process.exit(1);
+}
 
 const app = createMcpExpressApp({ host: HOST });
 

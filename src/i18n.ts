@@ -128,11 +128,16 @@ export const T = {
   /* red flag */
   routineNoted: (lang: Lang) =>
     lang === "hi" ? "इसमें अभी एमरजेंसी जैसी कोई बात नहीं है। मैंने इसे डॉक्टर के लिए नोट कर लिया है।" : "Nothing here needs emergency care. I have noted it for the doctor.",
+  // Worded for what actually happens: the consult is queued, and the family contact's number is on it. No SMS is sent.
   emergencyAlerted: (lang: Lang, family: boolean) =>
     lang === "hi"
-      ? `मैंने ऑन-कॉल डॉक्टर${family ? " और आपके परिवार" : ""} को भी ख़बर कर दी है।`
-      : `I have also alerted the on-call doctor${family ? " and your family contact" : ""}.`,
-  familyTold: (lang: Lang) => (lang === "hi" ? " आपके परिवार को भी बता दिया गया है।" : " Your family contact has been told."),
+      ? `ऑन-कॉल डॉक्टर के पास आपका केस पहुँच गया है${family ? ", आपके परिवार के नंबर के साथ" : ""}।`
+      : `The on-call doctor has your case now${family ? ", with your family contact's number" : ""}.`,
+  familyTold: (lang: Lang) => (lang === "hi" ? " डॉक्टर के पास आपके परिवार का नंबर है।" : " The doctor has your family contact's number."),
+  escalationFailed: (lang: Lang) =>
+    lang === "hi"
+      ? "मैं अभी क्लिनिक तक नहीं पहुँच पा रही, इसलिए किसी को ख़बर नहीं हुई है। अगर तकलीफ़ गंभीर लगे तो ख़ुद 108 पर कॉल कीजिए।"
+      : "I can't reach the clinic right now, so nobody has been told. If this feels serious, call 108 yourself.",
 
   /* care plan */
   noPlan: (lang: Lang, name: string) =>

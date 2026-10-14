@@ -100,7 +100,7 @@ followed by "Please do not take another one now."
 
 **Say:**
 > In Hindi: chest pain and sweating. This does not go to a model. Fifteen rules, in English and Hindi: call 108,
-> an emergency consult with his words attached, and Priya, his family contact, is alerted.
+> an emergency consult with his words attached, and his family contact's number on it for the doctor.
 
 ## 7. How it is built · 2:30 to 2:50
 
@@ -136,4 +136,4 @@ followed by "Please do not take another one now."
 
 - Do not say it was tested on an Echo. It was not; there is no Alexa+ sandbox. Say "simulated Alexa+ experience."
 - Do not say the triage rules are clinically validated. They are not.
-- Do not say the family is texted. The alert names the contact and is logged; SMS is not wired.
+- Do not say the family is told or texted. Their number goes on the consult; no message is sent.

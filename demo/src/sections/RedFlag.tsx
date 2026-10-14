@@ -19,7 +19,7 @@ export function RedFlag() {
         <ul className="targets">
           <li className="glass card"><Ambulance size={20} weight="duotone" /><b>108 ambulance</b><span>Spoken in the same breath, once, calmly.</span></li>
           <li className="glass card"><Stethoscope size={20} weight="duotone" /><b>On-call doctor</b><span>Emergency consult queued, claimable by any doctor.</span></li>
-          <li className="glass card"><UsersThree size={20} weight="duotone" /><b>Family contact</b><span>Alerted on the registered phone. Audit row written.</span></li>
+          <li className="glass card"><UsersThree size={20} weight="duotone" /><b>Family contact</b><span>Number put on the consult for the doctor to call. Audit row written.</span></li>
         </ul>
       </div>
     </section>

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { audit } from "../audit.js";
 import { sessionSecret, verifyDoctorSession, type DoctorSession } from "../auth/doctor.js";
 import { getDataSource } from "../data/index.js";
+import { ClinicConflict } from "../data/types.js";
 
 /**
  * /api/clinic: what the doctor portal reads.
@@ -78,11 +79,14 @@ export function clinicRoutes(): Router {
     try {
       const data = getDataSource();
       const id = String(req.params.id).slice(0, 80);
-      if (!(await data.startConsult(id, doctor?.registrationNo ?? null))) {
-        res.status(404).json({ error: "No open consult with that id." });
+      const patientId = await data.startConsult(id, doctor?.registrationNo ?? null);
+      if (!patientId) {
+        res.status(409).json({ error: "This consult is already open with a doctor, or closed." });
         return;
       }
-      await audit(data, "Started consult", String(req.body?.patientName ?? id).slice(0, 120), String(req.body?.reason ?? "").slice(0, 300) || undefined, doctor?.name ?? "Doctor (dev mode)");
+      // The trust log names the patient from the record, never from the request.
+      const patient = await data.getPatient(patientId);
+      await audit(data, "Started consult", patient?.fullName ?? patientId, undefined, doctor?.name ?? "Doctor (dev mode)");
       res.json({ ok: true });
     } catch (e) {
       res.status(503).json({ error: e instanceof Error ? e.message : String(e) });
@@ -120,6 +124,10 @@ export function clinicRoutes(): Router {
       await audit(data, "Filed encounter", patient.fullName, `${rx} prescription${rx === 1 ? "" : "s"} · ${b.ariaAccepted ? "ARIA handover accepted" : "ARIA handover not accepted"}`, doctor?.name ?? "Doctor (dev mode)");
       res.json({ ok: true, id });
     } catch (e) {
+      if (e instanceof ClinicConflict) {
+        res.status(409).json({ error: e.message });
+        return;
+      }
       res.status(503).json({ error: e instanceof Error ? e.message : String(e) });
     }
   });

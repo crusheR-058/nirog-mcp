@@ -28,7 +28,7 @@ describe("/api/clinic", () => {
     await runRedFlag(getDataSource(), { patientId: "pat_rahul", symptoms: "chest pain and sweating" });
     const live = (await (await fetch(`${base}/live`)).json()) as { consults: Array<{ patientId: string; triage: string }>; audit: Array<{ action: string; actorName: string }>; patients: unknown[] };
     expect(live.consults[0]).toMatchObject({ patientId: "pat_rahul", triage: "emergency" });
-    expect(live.audit.map((a) => a.action)).toEqual(expect.arrayContaining(["Queued consult", "Alerted family contact"]));
+    expect(live.audit.map((a) => a.action)).toEqual(expect.arrayContaining(["Queued consult", "Flagged family contact"]));
     expect(live.audit[0].actorName).toBe("Alexa+ (nirog-mcp)");
     expect(live.patients).toHaveLength(6);
   });
@@ -70,6 +70,13 @@ describe("/api/clinic", () => {
     expect(dose).toMatchObject({ logged: true, drug: "Paracetamol" });
     const live = (await (await fetch(`${base}/live`)).json()) as { audit: Array<{ action: string; reason?: string }> };
     expect(live.audit.find((a) => a.action === "Filed encounter")?.reason).toBe("1 prescription · ARIA handover accepted");
+  });
+
+  it("refuses to file an encounter against another patient's consult", async () => {
+    const rf = await runRedFlag(getDataSource(), { patientId: "pat_sunita", symptoms: "chest pain and sweating" });
+    if ("error" in rf) throw new Error(rf.error);
+    const r = await fetch(`${base}/encounters`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ patientId: "pat_meena", consultId: rf.consultId, assessment: "x" }) });
+    expect(r.status).toBe(409);
   });
 
   it("rejects an audit line with no action", async () => {

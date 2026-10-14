@@ -142,4 +142,17 @@ hackathon; this MCP server and Agent Skill are new.
 - `deploy/iam.sh` works under Git Bash on Windows (the AWS CLI could not open `/tmp` paths). IAM roles created and
   the service deployed to App Runner in ap-south-1 with the Supabase clinic and `PUBLIC_DEMO=1`.
 - SUBMISSION: the demo script is rebuilt around the closed loop; the Devpost text, friction log and README updated.
-
+- A code review of the day's work found and we fixed:
+  - `report_red_flag` could lose the 108 advice if the clinic record threw. It now always returns the advice;
+    a failed escalation is reported as such and the patient is told to call 108 themselves. If `start_intake`
+    fails, the page (and the Agent Skill) escalates through `report_red_flag`, and if even that fails the page
+    speaks a fixed "call 108" line.
+  - Dose guards failed open for any frequency the parser did not recognise ("every 6 hours"); only an explicit
+    "as needed" medicine is now unguarded. The four-hour window reads back across midnight. Drug names compare
+    case-insensitively.
+  - The voice said the family "has been alerted" when no message is sent. It now says the doctor has their number.
+  - Filing an encounter checks the consult belongs to that patient and is not already filed (409), backed by a
+    unique index; starting a consult only takes it from waiting or scheduled, so two doctors cannot both take it.
+    The trust log names the patient from the record, not from the request.
+  - The public-demo token covers only the six fictional patients; `PUBLIC_DEMO=1` without a secret refuses to start.
+- 84 tests.

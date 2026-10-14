@@ -1,5 +1,8 @@
 /** Clinic data shapes. The Supabase schema is supabase/migrations/0001_clinic.sql. */
 
+/** A write the clinic refuses because of the record's state (wrong patient, already filed, already taken). HTTP 409. */
+export class ClinicConflict extends Error {}
+
 export interface PatientRecord {
   id: string;
   fullName: string;
@@ -152,8 +155,9 @@ export interface NirogData {
   saveHandover(h: NewHandover): Promise<string>;
   /** The whole clinic for the portal, or null when this source has none (the portal then shows its built-in demo). */
   clinicSnapshot(): Promise<ClinicSnapshot | null>;
-  /** A doctor opens a consult. Returns false if there is no such consult. */
-  startConsult(consultId: string, doctorRegistrationNo: string | null): Promise<boolean>;
-  /** File a completed encounter and close its consult. Returns the encounter id. */
+  /** A doctor opens a waiting or scheduled consult. Returns its patient id, or null if it is not open to start. */
+  startConsult(consultId: string, doctorRegistrationNo: string | null): Promise<string | null>;
+  /** File a completed encounter and close its consult. Returns the encounter id. Throws ClinicConflict if the
+   *  consult belongs to another patient or was already filed. */
   fileEncounter(e: NewEncounter): Promise<string>;
 }

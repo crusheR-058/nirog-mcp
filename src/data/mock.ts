@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { AuditRecord, ConsultRecord, ConsultRequest, DoseRecord, EncounterRecord, NewEncounter, NewHandover, NirogData, PatientRecord } from "./types.js";
+import { ClinicConflict, type AuditRecord, type ConsultRecord, type ConsultRequest, type DoseRecord, type EncounterRecord, type NewEncounter, type NewHandover, type NirogData, type PatientRecord } from "./types.js";
 
 /** Demo fixtures mirroring the Nirog doctor portal seed, so demos work with no database. */
 export const MOCK_PATIENTS: PatientRecord[] = [
@@ -132,10 +132,12 @@ export class MockData implements NirogData {
   }
 
   async startConsult(consultId: string) {
-    return this.consults.some((c) => c.id === consultId);
+    return this.consults.find((c) => c.id === consultId)?.patientId ?? null;
   }
 
   async fileEncounter(e: NewEncounter) {
+    const consult = this.consults.find((c) => c.id === e.consultId);
+    if (consult && consult.patientId !== e.patientId) throw new ClinicConflict("That consult is for another patient.");
     const id = `enc_${randomUUID().slice(0, 8)}`;
     // A new array, not push: the default list is the shared MOCK_ENCOUNTERS constant.
     this.encounters = [...this.encounters, {

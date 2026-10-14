@@ -96,6 +96,8 @@ create table if not exists encounter (
   follow_up       jsonb
 );
 create index if not exists encounter_patient_idx on encounter (patient_id, started_at desc);
+-- One encounter per consult: a retried "File consultation" is refused, not recorded twice.
+create unique index if not exists encounter_consult_once on encounter (consult_id) where consult_id is not null;
 
 create table if not exists dose (
   id         text primary key default gen_random_uuid()::text,

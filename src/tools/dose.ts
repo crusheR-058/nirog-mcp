@@ -66,18 +66,22 @@ export async function runDose(data: NirogData, input: { patientId: string; medic
   const clock = clinicClock(now);
   const label = `${med.drug} ${med.strength ?? ""}`.trim();
   const slots = med.timesOfDay.filter((s) => SCHEDULED.includes(s));
-  const dosesToday = (await data.listDoses(patient.id, clock.dayStart)).filter((d) => d.drug === med.drug);
-  const takenToday = dosesToday.map((d) => d.slot);
+  // Read back far enough for the four-hour window to cross midnight: 11:40 pm and 12:10 am are half an hour apart.
+  const since = new Date(Math.min(clock.dayStart.getTime(), now.getTime() - MIN_INTERVAL_MS));
+  const sameDrug = (d: { drug: string }) => d.drug.trim().toLowerCase() === med.drug.trim().toLowerCase();
+  const recent = (await data.listDoses(patient.id, since)).filter(sameDrug);
+  const takenToday = recent.filter((d) => new Date(d.takenAt) >= clock.dayStart).map((d) => d.slot);
 
-  // "As needed" medicines have no schedule to check against, so they are simply recorded.
-  if (slots.length === 0) {
-    await data.logDose({ patientId: patient.id, drug: med.drug, slot: med.timesOfDay[0], takenAt: now });
-    await audit(data, "Logged dose", patient.fullName, `${label} · ${med.timesOfDay[0]}`);
-    return { patient: who, logged: true, drug: med.drug, slot: med.timesOfDay[0], today: null, remainingToday: [], spoken: T.doseLogged(lang, { drug: label, slot: med.timesOfDay[0], time: clock.time, next: null }) };
+  // Only an explicit "as needed" medicine (a rescue inhaler) is recorded without a check: refusing it could be dangerous.
+  // A frequency the parser did not understand ("every 6 hours") still gets the interval check below.
+  if (med.timesOfDay.includes("as needed")) {
+    await data.logDose({ patientId: patient.id, drug: med.drug, slot: "as needed", takenAt: now });
+    await audit(data, "Logged dose", patient.fullName, `${label} · as needed`);
+    return { patient: who, logged: true, drug: med.drug, slot: "as needed", today: null, remainingToday: [], spoken: T.doseLogged(lang, { drug: label, slot: "as needed", time: clock.time, next: null }) };
   }
 
   const remaining = slots.filter((s) => !takenToday.includes(s));
-  if (remaining.length === 0) {
+  if (slots.length > 0 && remaining.length === 0) {
     // The double-dose guard: every scheduled dose for today is already on record.
     await audit(data, "Refused duplicate dose", patient.fullName, `${label} · today's scheduled doses are already recorded`);
     return { patient: who, logged: false, reason: "already_taken", drug: med.drug, slot: null, today: { expected: slots.length, taken: slots.length }, remainingToday: [], spoken: T.doseDuplicate(lang, label) };
@@ -85,18 +89,26 @@ export async function runDose(data: NirogData, input: { patientId: string; medic
 
   // A second dose in the same part of the day is a double dose even when a later slot is still open:
   // "I took my Metformin" twice at night must not record the second one as the morning dose.
-  if (slots.includes(clock.period) && takenToday.includes(clock.period)) {
+  if (slots.length > 0 && slots.includes(clock.period) && takenToday.includes(clock.period)) {
     await audit(data, "Refused duplicate dose", patient.fullName, `${label} · ${clock.period} dose already recorded`);
     return { patient: who, logged: false, reason: "already_taken", drug: med.drug, slot: clock.period, today: { expected: slots.length, taken: slots.length - remaining.length }, remainingToday: remaining, spoken: T.doseDuplicateSlot(lang, label, clock.period) };
   }
 
   // Minutes apart is a double dose whatever the slots say: in the afternoon a twice-daily medicine still has its night
   // slot open, and "I took it" said twice must not fill it.
-  const last = dosesToday.map((d) => new Date(d.takenAt)).sort((a, b) => b.getTime() - a.getTime())[0];
+  const last = recent.map((d) => new Date(d.takenAt)).sort((a, b) => b.getTime() - a.getTime())[0];
   if (last && now.getTime() - last.getTime() < MIN_INTERVAL_MS) {
     const at = clinicClock(last).time;
     await audit(data, "Refused duplicate dose", patient.fullName, `${label} · last dose at ${at}, under four hours ago`);
-    return { patient: who, logged: false, reason: "already_taken", drug: med.drug, slot: null, today: { expected: slots.length, taken: slots.length - remaining.length }, remainingToday: remaining, spoken: T.doseTooSoon(lang, label, at) };
+    return { patient: who, logged: false, reason: "already_taken", drug: med.drug, slot: null, today: slots.length ? { expected: slots.length, taken: slots.length - remaining.length } : null, remainingToday: remaining, spoken: T.doseTooSoon(lang, label, at) };
+  }
+
+  // No schedule the parser understood: record it under the doctor's wording, after the interval check above.
+  if (slots.length === 0) {
+    const slot = med.timesOfDay[0];
+    await data.logDose({ patientId: patient.id, drug: med.drug, slot, takenAt: now });
+    await audit(data, "Logged dose", patient.fullName, `${label} · ${slot}`);
+    return { patient: who, logged: true, drug: med.drug, slot, today: null, remainingToday: [], spoken: T.doseLogged(lang, { drug: label, slot, time: clock.time, next: null }) };
   }
 
   const slot = remaining.includes(clock.period) ? clock.period : remaining[0];

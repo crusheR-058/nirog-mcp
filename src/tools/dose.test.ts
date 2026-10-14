@@ -71,6 +71,27 @@ describe("log_dose_taken", () => {
     expect(data.doses).toHaveLength(1);
   });
 
+  it("guards a medicine whose frequency it could not parse, and checks across midnight", async () => {
+    const data = new MockData();
+    await data.fileEncounter({ patientId: "pat_meena", consultId: null, doctorRegistrationNo: null, chiefComplaint: "Fever", assessment: "Viral fever",
+      clinicalNotes: "", prescriptions: [{ id: "rx", drug: "Paracetamol", strength: "500mg", frequency: "Every 6 hours", durationDays: 3 }], labRequests: [], followUp: null, now: AFTERNOON });
+    expect(await runDose(data, { patientId: "pat_meena", now: AFTERNOON })).toMatchObject({ logged: true });
+    expect(await runDose(data, { patientId: "pat_meena", now: new Date(AFTERNOON.getTime() + 60_000) })).toMatchObject({ logged: false, reason: "already_taken" });
+
+    // 18:10 UTC is 11:40 pm in the clinic; 18:40 UTC is 12:10 am the next clinic day.
+    const late = new MockData();
+    await runDose(late, { patientId: "pat_sunita", now: new Date("2026-10-07T18:10:00Z") });
+    expect(await runDose(late, { patientId: "pat_sunita", now: new Date("2026-10-07T18:40:00Z") })).toMatchObject({ logged: false, reason: "already_taken" });
+  });
+
+  it("records an explicit as-needed medicine without refusing it", async () => {
+    const data = new MockData();
+    await data.fileEncounter({ patientId: "pat_imran", consultId: null, doctorRegistrationNo: null, chiefComplaint: "Asthma", assessment: "Asthma flare",
+      clinicalNotes: "", prescriptions: [{ id: "rx", drug: "Salbutamol", strength: "100mcg", frequency: "PRN" }], labRequests: [], followUp: null, now: AFTERNOON });
+    expect(await runDose(data, { patientId: "pat_imran", now: AFTERNOON })).toMatchObject({ logged: true, slot: "as needed" });
+    expect(await runDose(data, { patientId: "pat_imran", now: new Date(AFTERNOON.getTime() + 60_000) })).toMatchObject({ logged: true });
+  });
+
   it("asks which medicine when there are several, and matches a named one", async () => {
     const data = new MockData();
     const ask = await runDose(data, { patientId: "pat_lakshmi", now: AFTERNOON });

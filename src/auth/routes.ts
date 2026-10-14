@@ -1,5 +1,5 @@
 import express, { type Request, type Response, type Router } from "express";
-import { getDataSource } from "../data/index.js";
+import { MOCK_PATIENTS } from "../data/mock.js";
 import { findDoctor, GoogleAuthError, inviteCodeMatches, loadAllowlist, mintDoctorSession, sessionSecret, verifyDoctorSession, verifyGoogleIdToken } from "./doctor.js";
 import { mintToken } from "./tokens.js";
 
@@ -72,7 +72,8 @@ export function authRoutes(): Router {
     const secret = process.env.NIROG_TOKEN_SECRET;
     if (!publicDemo || !secret) return res.status(404).json({ error: "Not a public demo server." });
     try {
-      const patients = (await getDataSource().listPatients()).map((p) => p.id);
+      // The fictional seeded household only, never whatever else the database might hold.
+      const patients = MOCK_PATIENTS.map((p) => p.id);
       const doctor = loadAllowlist()[0];
       const exp = Math.floor(Date.now() / 1000) + 6 * 3600;
       res.json({

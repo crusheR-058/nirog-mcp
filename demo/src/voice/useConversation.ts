@@ -4,15 +4,16 @@ import { canListen, listenOnce, speak, stopSpeaking } from "../speech";
 import { patientById, refreshLive, useDemo, type Level } from "../store";
 
 /* Which tool does this sentence want? A real Alexa+ agent decides this from the tool descriptions; the demo page uses plain patterns. */
-const SYMPTOM = /pain|ache|hurt|fever|cough|dizzy|bleed|breath|vomit|sweat|faint|दर्द|बुखार|सांस|साँस|खांसी|खाँसी|चक्कर|उल्टी|पसीना|बेहोश|तकलीफ़|तकलीफ/i;
+const SYMPTOM = /pain|ache|hurt|fever|cough|dizzy|bleed|breath|vomit|sweat|faint|swell|swollen|rash|numb|दर्द|बुखार|सांस|साँस|खांसी|खाँसी|चक्कर|उल्टी|पसीना|बेहोश|तकलीफ़|तकलीफ/i;
 const DOSE = /\b(took|taken|had my|just had|have had)\b.*\b(medicines?|tablets?|pills?|dose|dawai|dawa|goli)\b|\b(dawai|dawa|goli)\b.*\b(le li|kha li|le liya|kha liya)\b|(दवा|दवाई|गोली)\s*(ले|खा)\s*(ली|लिया)/i;
 const SUMMARY = /\b(this week|past week|last week|summary)\b|\bhow (is|has|was|have) .{1,30}(doing|been)\b|इस हफ्ते|इस हफ़्ते|कैसे हैं|कैसी हैं|हाल कैसा/i;
 const CARE_PLAN = /\b(medicines?|tablets?|dawai|dose|pills?|tests?|follow[- ]?up|next visit|doctor next|what do i take)\b|कौन सी दवा|कौन-सी दवा|दवा कब|जाँच|जांच/i;
 
-export function route(text: string): "start_intake" | "log_dose_taken" | "get_family_summary" | "get_care_plan" {
+export function route(text: string, named?: string): "start_intake" | "log_dose_taken" | "get_family_summary" | "get_care_plan" {
   // A symptom always wins: "I took my tablet but my chest still hurts" must reach triage, not the dose log.
   if (SYMPTOM.test(text)) return "start_intake";
-  if (DOSE.test(text)) return "log_dose_taken";
+  // "I took my Ibuprofen" names the medicine instead of saying "tablet".
+  if (DOSE.test(text) || (named && /\b(took|taken|had)\b/i.test(text))) return "log_dose_taken";
   if (SUMMARY.test(text)) return "get_family_summary";
   if (CARE_PLAN.test(text)) return "get_care_plan";
   return "start_intake";
@@ -25,6 +26,12 @@ function namedMedicine(text: string, patientId: string): string | undefined {
   const meds = [...(patientById(patientId)?.medications ?? []).map((m) => m.split(" ")[0]), ...prescribed];
   return meds.find((name) => text.toLowerCase().includes(name.toLowerCase()));
 }
+
+/** Spoken when not even the red-flag tool answers. The page cannot triage on its own, so it says the safe thing. */
+const UNREACHABLE: Record<"en" | "hi", string> = {
+  en: "I can't reach the clinic right now. If this feels serious, call 108 now.",
+  hi: "मैं अभी क्लिनिक तक नहीं पहुँच पा रही। अगर तकलीफ़ गंभीर लगे तो अभी 108 पर कॉल कीजिए।",
+};
 
 export function summarize(tool: string, r: unknown): string[] {
   if (!r || typeof r !== "object") return [];
@@ -113,7 +120,7 @@ export function useConversation() {
 
       const pid = settings.patientId;
       const who = patientById(pid)?.fullName ?? pid;
-      const tool = route(text);
+      const tool = route(text, namedMedicine(text, pid));
       // Decided here, when the tool is chosen, and not after the reply is spoken: people interrupt.
       if (tool !== "start_intake") intakeOpen.current = false;
       else if (!intakeOpen.current) {
@@ -133,9 +140,36 @@ export function useConversation() {
       // The server writes its own trust log. The page only keeps a local copy when it cannot read the server's.
       const local = !useDemo.getState().live;
       if (local) addAudit({ actorName: "Alexa+ (nirog-mcp)", action: r.error ? `Refused ${tool}` : `Called ${tool}`, target: who, reason: r.error ? r.error.slice(0, 80) : undefined });
+
+      // Escalation through report_red_flag, which answers even when the clinic record cannot be read.
+      const escalate = async (modelRedFlag: boolean) => {
+        const rfArgs = { patient_id: pid, symptoms: text, model_red_flag: modelRedFlag, language };
+        const rid = addTrace({ tool: "report_red_flag", args: rfArgs });
+        setPhase("thinking");
+        const rr = await callTool(settings, "report_red_flag", rfArgs);
+        finishTrace(rid, { ms: rr.ms, error: rr.error, summary: summarize("report_red_flag", rr.result) });
+        if (rr.error) return say(UNREACHABLE[language], "urgent");
+        const rf = rr.result as { level: Level; spoken: string; consultId: string | null; actions: Array<{ type: string }> };
+        setLevel(rf.level);
+        if (rf.consultId) {
+          bump("consults");
+          if (local) {
+            addQueue({ id: rf.consultId, patientId: pid, kind: rf.level === "emergency" ? "emergency" : "new", triage: rf.level, state: "waiting", checkedInAt: new Date().toISOString(), scheduledFor: new Date().toISOString(), channel: "audio", reason: `Alexa+: "${text.slice(0, 60)}"`, quality: "fair", redFlagCount: 1, source: "alexa" });
+            addAudit({ actorName: "Alexa+ (nirog-mcp)", action: "Queued consult", target: who, reason: `${rf.level} · rules-based triage` });
+          }
+        }
+        if (rf.actions.some((a) => a.type === "caregiver_alerted")) {
+          bump("alerts");
+          if (local) addAudit({ actorName: "Alexa+ (nirog-mcp)", action: "Flagged family contact", target: who, reason: "Red flag escalation · contact on the consult" });
+        }
+        return say(rf.spoken, rf.level);
+      };
+
       if (r.error) {
-        setPhase("idle");
         setNotice({ text: r.error, error: true });
+        // The intake did not run, so nothing has checked these words for danger yet.
+        if (tool === "start_intake") await escalate(false);
+        else setPhase("idle");
         void refreshLive();
         return;
       }
@@ -149,29 +183,7 @@ export function useConversation() {
       // An emergency goes straight to escalation, which speaks the advice itself; everything else is spoken here.
       if (level !== "emergency") await say(String(res.spoken ?? ""), level);
 
-      if (tool === "start_intake" && (level !== "routine" || aria?.redFlag)) {
-        const rfArgs = { patient_id: pid, symptoms: text, model_red_flag: Boolean(aria?.redFlag), language };
-        const rid = addTrace({ tool: "report_red_flag", args: rfArgs });
-        setPhase("thinking");
-        const rr = await callTool(settings, "report_red_flag", rfArgs);
-        finishTrace(rid, { ms: rr.ms, error: rr.error, summary: summarize("report_red_flag", rr.result) });
-        if (!rr.error) {
-          const rf = rr.result as { level: Level; spoken: string; consultId: string | null; actions: Array<{ type: string }> };
-          setLevel(rf.level);
-          if (rf.consultId) {
-            bump("consults");
-            if (local) {
-              addQueue({ id: rf.consultId, patientId: pid, kind: rf.level === "emergency" ? "emergency" : "new", triage: rf.level, state: "waiting", checkedInAt: new Date().toISOString(), scheduledFor: new Date().toISOString(), channel: "audio", reason: `Alexa+: "${text.slice(0, 60)}"`, quality: "fair", redFlagCount: 1, source: "alexa" });
-              addAudit({ actorName: "Alexa+ (nirog-mcp)", action: "Queued consult", target: who, reason: `${rf.level} · rules-based triage` });
-            }
-          }
-          if (rf.actions.some((a) => a.type === "caregiver_alerted")) {
-            bump("alerts");
-            if (local) addAudit({ actorName: "Alexa+ (nirog-mcp)", action: "Alerted family contact", target: who, reason: "Red flag escalation" });
-          }
-          await say(rf.spoken, rf.level);
-        } else setPhase("idle");
-      }
+      if (tool === "start_intake" && (level !== "routine" || aria?.redFlag)) await escalate(Boolean(aria?.redFlag));
       // A finished routine intake queues itself for the doctor, with the handover attached.
       const handover = res.handover as { consultId: string | null; triage: Level } | null | undefined;
       if (handover?.consultId) {

@@ -27,6 +27,19 @@ describe("report_red_flag", () => {
     expect(data.consults[0].handoverId).toBeUndefined();
   });
 
+  it("still speaks the emergency advice when the clinic record is down", async () => {
+    const down = new MockData();
+    const fail = async () => { throw new Error("database down"); };
+    down.getPatient = fail;
+    down.requestConsult = fail;
+    const r = await runRedFlag(down, { patientId: "pat_rahul", symptoms: "chest pain and sweating a lot" });
+    if ("error" in r) throw new Error(r.error);
+    expect(r.level).toBe("emergency");
+    expect(r.spoken).toContain("108");
+    expect(r.spoken).toContain("nobody has been told");
+    expect(r.actions.map((a) => a.type)).toEqual(["emergency_advice", "escalation_failed"]);
+  });
+
   it("queues an urgent consult without emergency advice", async () => {
     const r = await runRedFlag(new MockData(), { patientId: "pat_sunita", symptoms: "fever for 5 days" });
     if ("error" in r) throw new Error(r.error);

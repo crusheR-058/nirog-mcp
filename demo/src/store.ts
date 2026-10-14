@@ -237,7 +237,7 @@ export const useDemo = create<DemoState>((set, get) => ({
     if (!q || !opening) return;
     const target = patientById(q.patientId)?.fullName ?? q.patientId;
     // With a database the server records it; otherwise the trust log in this tab (or the server's audit route) does.
-    if (get().clinicLive) void clinicPost(`/consults/${encodeURIComponent(q.id)}/start`, { patientName: target, reason: q.reason });
+    if (get().clinicLive) void clinicPost(`/consults/${encodeURIComponent(q.id)}/start`, {});
     else get().addAudit({ actorName: doctorName(), action: "Started consult", target, reason: q.reason });
   },
   endConsult: () => set({ consultQueueId: null }),

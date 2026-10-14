@@ -1,6 +1,6 @@
 # Devpost submission text
 
-> **Before you paste this:** fill in the three items marked `TODO`, and delete this note.
+> **Before you paste this:** fill in the two items marked `TODO`, and delete this note.
 >
 > - `TODO-VIDEO`: the YouTube link, once recorded (see DEMO_SCRIPT.md).
 > - `TODO-TEAM`: who built it.
@@ -59,7 +59,8 @@ the voice tools read.
 
 **It escalates on rules, not on a model's mood.** Fifteen table-driven rules catch emergencies in English and
 Hindi. "I have chest pain and I'm sweating" gets the 108 ambulance advice in the same breath, an emergency
-consult at the top of the on-call doctor's queue, and an alert to the family contact. The rules know the
+consult at the top of the on-call doctor's queue with his words and the family contact's number on it. If
+the clinic record is down, the advice still comes: nothing in that path waits on a database. The rules know the
 patient: wheezing is an emergency for someone with asthma and routine for anyone else. A model may raise a
 level. It can never lower one.
 
@@ -101,7 +102,7 @@ so a consult raised by voice in one room appears on the doctor's screen in anoth
   speech in and out that is a real MCP client of the real server, beside a trace of every tool call, and the
   doctor's portal on the same record. On the deployment, a visitor gets a short-lived consent token for the
   fictional demo household, so judges can use it with no Alexa+ account and no clinic login.
-- **80 automated tests,** all offline, covering the rules, the Hindi handling, the double-dose guards, consent,
+- **84 automated tests,** all offline, covering the rules, the Hindi handling, the double-dose guards, consent,
   the handovers, and the clinic API; plus an end-to-end run in a headless browser against Supabase and Bedrock.
 
 ## What was built during the hackathon, and what was not
@@ -178,7 +179,8 @@ CHANGELOG.md records it day by day.
 - Connect to a real Alexa+ device as soon as access exists, and map Alexa's household voice profiles to consent.
 - Have a clinician review and extend the triage table.
 - Build a labelled Hindi recall battery and tune the cross-language thresholds on real data.
-- Send the family alert by SMS, and add more regional languages.
+- Message the family contact by SMS (today their number goes on the consult; nothing is sent), and add more
+  regional languages.
 
 ## Built with
 
@@ -189,7 +191,8 @@ CHANGELOG.md records it day by day.
 
 - **Repository:** https://github.com/crusheR-058/nirog-mcp
 - **Video:** TODO-VIDEO
-- **Live:** TODO-LIVE
+- **Live:** https://j2fkpyar4b.ap-south-1.awsapprunner.com/demo/ (simulated Alexa+ and the doctor portal on one
+  live record; no account needed. The MCP endpoint is `/mcp` and needs a consent token.)
 - **Locally, in three commands:**
 
   ```bash

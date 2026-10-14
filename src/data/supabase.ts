@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { AuditRecord, ClinicSnapshot, ConsultRecord, ConsultRequest, DoseRecord, EncounterRecord, NewEncounter, NewHandover, NirogData, PatientRecord } from "./types.js";
+import { ClinicConflict, type AuditRecord, type ClinicSnapshot, type ConsultRecord, type ConsultRequest, type DoseRecord, type EncounterRecord, type NewEncounter, type NewHandover, type NirogData, type PatientRecord } from "./types.js";
 
 const PATIENT_COLS = "id, full_name, preferred_language, allergies, conditions, current_medications";
 
@@ -224,20 +224,28 @@ export class SupabaseData implements NirogData {
     return data?.id ?? null;
   }
 
-  async startConsult(consultId: string, doctorRegistrationNo: string | null): Promise<boolean> {
+  async startConsult(consultId: string, doctorRegistrationNo: string | null): Promise<string | null> {
     const doctorId = await this.doctorId(doctorRegistrationNo);
+    // Only from waiting or scheduled, in one statement: two doctors clicking Start cannot both take it.
     const { data, error } = await this.client
       .from("consult")
       .update({ state: "in_consult", ...(doctorId ? { doctor_id: doctorId } : {}) })
       .eq("id", consultId)
-      .neq("state", "completed")
-      .select("id");
+      .in("state", ["waiting", "scheduled"])
+      .select("patient_id");
     if (error) throw new Error(`Starting the consult failed: ${error.message}`);
-    return (data ?? []).length > 0;
+    return data?.[0]?.patient_id ?? null;
   }
 
   async fileEncounter(e: NewEncounter): Promise<string> {
     const doctorId = await this.doctorId(e.doctorRegistrationNo);
+    if (e.consultId) {
+      const { data: c, error: ce } = await this.client.from("consult").select("patient_id, state").eq("id", e.consultId).maybeSingle();
+      if (ce) throw new Error(`Consult lookup failed: ${ce.message}`);
+      if (!c) throw new ClinicConflict("No such consult.");
+      if (c.patient_id !== e.patientId) throw new ClinicConflict("That consult is for another patient.");
+      if (c.state === "completed") throw new ClinicConflict("This consult has already been filed.");
+    }
     const { data, error } = await this.client
       .from("encounter")
       .insert({
@@ -255,6 +263,8 @@ export class SupabaseData implements NirogData {
       })
       .select("id")
       .single();
+    // The unique index on encounter.consult_id turns a retried request into a conflict, not a second record.
+    if (error?.code === "23505") throw new ClinicConflict("This consult has already been filed.");
     if (error) throw new Error(`Filing the encounter failed: ${error.message}`);
     if (e.consultId) {
       const done = await this.client.from("consult").update({ state: "completed", ...(doctorId ? { doctor_id: doctorId } : {}) }).eq("id", e.consultId);

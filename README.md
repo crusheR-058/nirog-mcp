@@ -39,7 +39,7 @@ demo history, an offline embedder, and ARIA's questions from Amazon Bedrock if y
 (set `ARIA_MODEL=off` to use the built-in fallback questions instead).
 
 ```bash
-pnpm test           # 80 tests, offline, a few seconds
+pnpm test           # 84 tests, offline, a few seconds
 pnpm typecheck
 ```
 
@@ -48,7 +48,7 @@ pnpm typecheck
 | Tool | What it does |
 |---|---|
 | `start_intake` | Records the complaint unedited, recalls earlier complaints that meant the same thing, resolves the body region (inheriting it from memory when the sentence names none), runs the recurrence rule and the triage rules, and returns ARIA's next question or a handover summary. A finished intake saves the handover for the doctor and queues the visit (urgent when the complaint keeps recurring). |
-| `report_red_flag` | Rules-based triage. On an emergency: speaks the 108 ambulance advice, queues a consult for the on-call doctor with the patient's words and the rule that fired, alerts the family contact by name. |
+| `report_red_flag` | Rules-based triage. On an emergency: speaks the 108 ambulance advice, queues a consult for the on-call doctor with the patient's words and the rule that fired, and puts the family contact on it. It answers even when the clinic record is down: the 108 advice never depends on the database. |
 | `get_care_plan` | Active medicines with times of day, pending tests, when the follow-up is due. |
 | `log_dose_taken` | Records a dose and refuses a double dose: a second dose in the same part of the day, or any dose once today's are all on record. Days are counted in the clinic's time zone. |
 | `get_family_summary` | A caregiver's view of the last few days: complaint counts by body region, whether a pattern is forming, doses recorded against doses expected. Counts only, never the patient's words. |
@@ -163,8 +163,8 @@ Stated plainly, because a clinical tool that overstates itself is worse than one
 - **The model sometimes asks two things at once.** The number of questions is enforced in code (two at least,
   three at most). Their wording is not: in our last run 1 of 38 model-written lines joined two questions with
   "and". One call in an earlier run of 44 returned no usable answer; the built-in question was spoken instead.
-- **Alerts are recorded, not sent.** The family-contact alert names the household's contact and writes a
-  trust-log entry. There is no SMS gateway.
+- **The family is not messaged.** The household's contact is put on the consult for the doctor to call and
+  the trust log records it. There is no SMS gateway, and the assistant never says the family has been told.
 - **The public demo is open by design.** With `PUBLIC_DEMO=1` anyone can read and write the fictional demo clinic,
   within a per-address rate limit. Real deployments leave it off and mint tokens per household.
 - **The call room has no signalling server.** It captures your camera and microphone and shows the waiting

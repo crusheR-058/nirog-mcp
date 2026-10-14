@@ -51,7 +51,7 @@ export function Deck() {
         <div className="glass card">
           <div className="card-head"><span className="eyebrow"><Warning size={14} weight="duotone" /> Alerts</span></div>
           <div className="big">{alerts}</div>
-          <p className="muted">Family contact alerted tonight</p>
+          <p className="muted">Family contact put on a consult tonight</p>
           <p className="muted small">Rules, not weights. A model can raise a level, never lower it.</p>
         </div>
 
