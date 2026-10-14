@@ -1,5 +1,8 @@
 import express, { type Request, type Response, type Router } from "express";
+import { audit } from "../audit.js";
+import { getDataSource } from "../data/index.js";
 import { MOCK_PATIENTS } from "../data/mock.js";
+import { resetDemo } from "../demo-reset.js";
 import { findDoctor, GoogleAuthError, inviteCodeMatches, loadAllowlist, mintDoctorSession, sessionSecret, verifyDoctorSession, verifyGoogleIdToken } from "./doctor.js";
 import { mintToken } from "./tokens.js";
 
@@ -11,6 +14,7 @@ import { mintToken } from "./tokens.js";
  *   POST /auth/doctor/verify           { idToken, registrationNo, inviteCode }   one-time verification; returns a new session
  *   POST /auth/doctor/signout          nothing to revoke server-side (sessions are signed), kept for symmetry
  *   GET  /auth/demo                    PUBLIC_DEMO only: a short-lived consent token for the demo household and a demo doctor session
+ *   POST /auth/demo/reset              PUBLIC_DEMO only: put the demo clinic back as seeded, at most once a minute
  *
  * PUBLIC_DEMO=1 is for the hackathon deployment, where judges have no Alexa+ account and are not clinic doctors. Every
  * patient in it is fictional. Tokens are still signed and checked; the demo only hands them out. Never set it with real data.
@@ -67,6 +71,23 @@ export function authRoutes(): Router {
   });
 
   r.post("/doctor/signout", (_req: Request, res: Response) => res.json({ ok: true }));
+
+  // Judges share one demo clinic. Each can start the story from the seeded state; a reset in the last minute counts.
+  let lastReset = 0;
+  r.post("/demo/reset", async (_req: Request, res: Response) => {
+    if (!publicDemo || !process.env.NIROG_TOKEN_SECRET) return res.status(404).json({ error: "Not a public demo server." });
+    const wait = 60_000 - (Date.now() - lastReset);
+    if (wait > 0) return res.status(429).json({ error: "The demo was reset less than a minute ago.", retryInSeconds: Math.ceil(wait / 1000) });
+    lastReset = Date.now();
+    try {
+      await resetDemo();
+      await audit(getDataSource(), "Reset the demo clinic", "Demo clinic", "Public demo: back to the seeded state", "Public demo visitor");
+      res.json({ ok: true });
+    } catch (e) {
+      lastReset = 0;
+      res.status(503).json({ error: e instanceof Error ? e.message : String(e) });
+    }
+  });
 
   r.get("/demo", async (_req: Request, res: Response) => {
     const secret = process.env.NIROG_TOKEN_SECRET;

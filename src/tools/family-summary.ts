@@ -98,6 +98,7 @@ export function registerFamilySummaryTool(server: McpServer, deps: { data: Nirog
     "get_family_summary",
     {
       title: "Get family summary",
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
       description:
         "A caregiver's summary of one patient over the last few days: how many complaints were recorded and in which " +
         "body regions, whether a recurrence pattern is forming, how many scheduled doses were recorded as taken, and " +
@@ -118,7 +119,7 @@ export function registerFamilySummaryTool(server: McpServer, deps: { data: Nirog
       }
       const result = await runFamilySummary(deps, { patientId: patient_id, days, now: now(), lang });
       if ("error" in result) return { isError: true, content: [{ type: "text", text: result.error }] };
-      return { content: [{ type: "text", text: JSON.stringify(result) }] };
+      return { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result as unknown as Record<string, unknown> };
     },
   );
 }

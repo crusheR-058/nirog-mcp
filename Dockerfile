@@ -16,6 +16,7 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY package.json ./
 COPY skills ./skills
+COPY supabase ./supabase
 EXPOSE 8080
 USER node
 CMD ["node", "dist/http.js"]

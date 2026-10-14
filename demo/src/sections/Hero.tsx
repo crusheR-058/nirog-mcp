@@ -1,6 +1,6 @@
-import { ArrowDown, Brain, ShieldCheck, Waveform } from "@phosphor-icons/react";
+import { ArrowDown, Brain, Play, ShieldCheck, Waveform } from "@phosphor-icons/react";
 
-export function Hero({ onNext }: { onNext: () => void }) {
+export function Hero({ onNext, onPlay }: { onNext: () => void; onPlay: () => void }) {
   return (
     <section className="hero" id="hero" aria-label="Nirog for Alexa+">
       <div className="hero-copy">
@@ -18,9 +18,15 @@ export function Hero({ onNext }: { onNext: () => void }) {
           <span><ShieldCheck size={16} weight="duotone" /> Rules-based red flags</span>
           <span>Hindi or English</span>
         </div>
-        <button className="link-down" onClick={onNext}>
-          <ArrowDown size={16} weight="bold" /> See the deck
-        </button>
+        <div className="hero-actions">
+          <button className="btn primary" onClick={onPlay}>
+            <Play size={16} weight="fill" /> Play the 3-minute story
+          </button>
+          <button className="link-down" onClick={onNext}>
+            <ArrowDown size={16} weight="bold" /> See the deck
+          </button>
+        </div>
+        <p className="muted small hero-note">One evening, both chairs, played live on this page: a real agent, real tool calls, a real clinic record. Sound on.</p>
       </div>
     </section>
   );

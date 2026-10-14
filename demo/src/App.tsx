@@ -14,6 +14,7 @@ import { Talk } from "./sections/Talk";
 import { refreshLive, useDemo } from "./store";
 import { useConversation } from "./voice/useConversation";
 import { VoiceBar } from "./voice/VoiceBar";
+import { StoryPlayer, useStory } from "./tour/StoryPlayer";
 
 const Background = lazy(() => import("./bg/Background").then((m) => ({ default: m.Background })));
 const DoctorPage = lazy(() => import("./doctor/DoctorPage").then((m) => ({ default: m.DoctorPage })));
@@ -74,6 +75,7 @@ function Deck3() {
   const section = useDemo((s) => s.section);
   const setSection = useDemo((s) => s.setSection);
   const level = useDemo((s) => s.level);
+  const { story, play, stop } = useStory();
 
   useEffect(() => {
     const els = SECTIONS.map((s) => document.getElementById(s.id)).filter((el): el is HTMLElement => Boolean(el));
@@ -120,7 +122,7 @@ function Deck3() {
       </nav>
 
       <main className="page">
-        <Hero onNext={() => go(1)} />
+        <Hero onNext={() => go(1)} onPlay={play} />
         <Journey />
         <Deck />
         <MemoryGraph />
@@ -137,6 +139,7 @@ function Deck3() {
       </main>
 
       <VoiceBar convo={convo} />
+      <StoryPlayer story={story} onStop={stop} onReplay={play} />
     </div>
   );
 }

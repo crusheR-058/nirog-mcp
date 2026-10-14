@@ -105,6 +105,7 @@ export function registerCarePlanTool(server: McpServer, data: NirogData, scope: 
     "get_care_plan",
     {
       title: "Get care plan",
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
       description:
         "Returns the patient's current care plan from their last doctor consultation: active medicines with times of day, " +
         "pending tests, and when the next follow-up is due. Includes a `spoken` field ready to read aloud. " +
@@ -125,7 +126,7 @@ export function registerCarePlanTool(server: McpServer, data: NirogData, scope: 
       const encounter = await data.getLatestEncounter(patient_id);
       const plan = buildCarePlan(patient, encounter, now(), lang);
       await audit(data, "Called get_care_plan", patient.fullName, "Patient asked about medicines or follow-up");
-      return { content: [{ type: "text", text: JSON.stringify(plan) }] };
+      return { content: [{ type: "text", text: JSON.stringify(plan) }], structuredContent: plan as unknown as Record<string, unknown> };
     },
   );
 }

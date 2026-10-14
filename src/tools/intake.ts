@@ -207,6 +207,7 @@ export function registerIntakeTool(
     "start_intake",
     {
       title: "Start intake",
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
       description:
         "Records what the patient says, in their own words, into their clinical memory and recalls earlier complaints " +
         "that meant the same thing even when worded differently. Returns prior matches, a recurrence flag when the same " +
@@ -234,7 +235,7 @@ export function registerIntakeTool(
       }
       const result = await runIntake(deps, { patientId: patient_id, complaint, transcript, now: now(), lang });
       if ("error" in result) return { isError: true, content: [{ type: "text", text: result.error }] };
-      return { content: [{ type: "text", text: JSON.stringify(result) }] };
+      return { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result as unknown as Record<string, unknown> };
     },
   );
 }

@@ -131,6 +131,7 @@ export function registerDoseTool(server: McpServer, data: NirogData, scope: Cons
     "log_dose_taken",
     {
       title: "Log dose taken",
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
       description:
         "Records that the patient took a medicine from their care plan, and guards against a double dose: if every " +
         "scheduled dose for today is already recorded it refuses and says so. If the patient has several active " +
@@ -151,7 +152,7 @@ export function registerDoseTool(server: McpServer, data: NirogData, scope: Cons
       }
       const result = await runDose(data, { patientId: patient_id, medicine, now: now(), lang });
       if ("error" in result) return { isError: true, content: [{ type: "text", text: result.error }] };
-      return { content: [{ type: "text", text: JSON.stringify(result) }] };
+      return { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result as unknown as Record<string, unknown> };
     },
   );
 }

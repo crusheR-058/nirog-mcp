@@ -64,6 +64,9 @@ if ("speechSynthesis" in window) speechSynthesis.onvoiceschanged = () => undefin
 /* The assistant's voice is Amazon Polly (Kajal, neural, Indian English and Hindi) from the server; the browser's own
    voice is the fallback, so a machine without a Hindi voice still hears Hindi. */
 let ticket = 0;
+/** The story plays a little faster than conversation; anyone using the bar hears the natural pace. */
+let rate = 1;
+export const setSpeechRate = (r: number) => { rate = r; };
 let playing: HTMLAudioElement | null = null;
 let pollyDown = false;
 
@@ -85,6 +88,7 @@ export function speak(text: string, onEnd?: () => void, language: Language = "en
     // Stopped while the audio was on its way: never start a line the patient already interrupted.
     if (mine !== ticket) return URL.revokeObjectURL(url);
     const audio = new Audio(url);
+    audio.playbackRate = rate;
     playing = audio;
     let done = false;
     const finish = () => {
@@ -95,7 +99,13 @@ export function speak(text: string, onEnd?: () => void, language: Language = "en
       if (playing === audio) playing = null;
       onEnd?.();
     };
-    const guard = setTimeout(finish, Math.max(4000, text.split(/\s+/).length * 600));
+    // A safety net for an "ended" event that never comes; once the real length is known, it is that plus a margin.
+    let guard = setTimeout(finish, Math.max(4000, text.split(/\s+/).length * 600));
+    audio.onloadedmetadata = () => {
+      if (!Number.isFinite(audio.duration)) return;
+      clearTimeout(guard);
+      guard = setTimeout(finish, (audio.duration / rate) * 1000 + 1200);
+    };
     audio.onended = finish;
     audio.onerror = finish;
     // Autoplay can be refused (no gesture yet, headless): fall back to the browser voice for this line only.
@@ -125,7 +135,7 @@ function browserSpeak(text: string, onEnd?: () => void, language: Language = "en
   const voice = pickVoice(language);
   if (voice) u.voice = voice;
   u.lang = LOCALE[language];
-  u.rate = 0.98;
+  u.rate = 0.98 * rate;
   u.onend = finish;
   u.onerror = finish;
   speechSynthesis.speak(u);

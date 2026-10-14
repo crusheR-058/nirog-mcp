@@ -106,6 +106,7 @@ export function registerRedFlagTool(server: McpServer, data: NirogData, scope: C
     "report_red_flag",
     {
       title: "Report red flag",
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
       description:
         "Runs rules-based triage on what the patient said and escalates: emergency advice spoken immediately, an " +
         "urgent or emergency consult queued for the on-call doctor, and the family contact alerted. The rules are a " +
@@ -129,7 +130,7 @@ export function registerRedFlagTool(server: McpServer, data: NirogData, scope: C
       }
       const result = await runRedFlag(data, { patientId: patient_id, symptoms, modelRedFlag: model_red_flag, now: now(), lang });
       if ("error" in result) return { isError: true, content: [{ type: "text", text: result.error }] };
-      return { content: [{ type: "text", text: JSON.stringify(result) }] };
+      return { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result as unknown as Record<string, unknown> };
     },
   );
 }

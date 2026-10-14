@@ -24,6 +24,7 @@ export async function createNirogServer(scope: ConsentScope = { kind: "all" }): 
     "ping",
     {
       title: "Ping",
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
       description: "Health check. Returns 'pong' and the server time. Use it to confirm the Nirog MCP server is reachable.",
       inputSchema: { message: z.string().optional().describe("Optional text to echo back") },
     },
