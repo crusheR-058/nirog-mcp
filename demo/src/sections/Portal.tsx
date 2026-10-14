@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ArrowSquareOut, CalendarBlank, CaretRight, ChatCircle, CheckCircle, Clock, Eye, FileText, Flask, Gear, Headset, Lock, MagnifyingGlass, Phone, Pill, Plus, ShieldCheck, SquaresFour, Users, VideoCamera, Warning, X } from "@phosphor-icons/react";
-import { ageOf, CHANNEL, CONNECTION, DOCTOR, fmtDate, fmtTime, handoverFor, initials, KIND, minutesSince, PATIENTS, patientById, timeAgo, TRIAGE, type Channel, type QueueItem } from "../clinic/data";
+import { ageOf, CHANNEL, CONNECTION, DOCTOR, fmtDate, fmtTime, initials, KIND, minutesSince, timeAgo, TRIAGE, type Channel, type Encounter, type Handover, type QueueItem } from "../clinic/data";
 import { CallRoom } from "../clinic/CallRoom";
-import { useDemo, type PortalTab } from "../store";
+import { handoverFor, patientById, useDemo, type PortalTab } from "../store";
 
 const TABS: Array<{ id: PortalTab; label: string; icon: typeof SquaresFour }> = [
   { id: "dashboard", label: "Dashboard", icon: SquaresFour },
@@ -16,6 +16,9 @@ const TABS: Array<{ id: PortalTab; label: string; icon: typeof SquaresFour }> = 
 function Avatar({ name, tone, size }: { name: string; tone?: string; size?: "big" }) {
   return <span className={`avatar ${tone ?? ""} ${size ?? ""}`}>{initials(name)}</span>;
 }
+
+/** A rules-assembled handover has no model confidence; say so rather than show a number. */
+const confidence = (h: Handover) => (h.aiConfidence == null ? "Rules-based" : `${Math.round(h.aiConfidence * 100)}% confidence`);
 
 function ChannelIcon({ c }: { c: Channel }) {
   return c === "video" ? <VideoCamera size={13} weight="bold" /> : c === "audio" ? <Phone size={13} weight="bold" /> : <ChatCircle size={13} weight="bold" />;
@@ -74,7 +77,8 @@ function Dashboard() {
           <div className="queue-head"><h4>Today's queue</h4><span className="muted small">Sorted by triage, then wait time</span></div>
           <ol className="queue">
             {sorted.map((q) => {
-              const p = patientById(q.patientId)!;
+              const p = patientById(q.patientId);
+              if (!p) return null;
               const done = q.state === "completed";
               const live = q.state === "waiting" || q.state === "in_consult";
               const mins = minutesSince(q.checkedInAt);
@@ -100,7 +104,7 @@ function Dashboard() {
                       <span className="pill"><ChannelIcon c={q.channel} /> {CHANNEL[q.channel]}</span>
                     </div>
                     {live ? (
-                      <button className="btn primary small" onClick={() => { startConsult(q.id); addAudit({ actorName: DOCTOR.name, action: "Started consult", target: p.fullName, reason: q.reason }); }}>{q.state === "in_consult" ? "Resume" : "Start"}</button>
+                      <button className="btn primary small" onClick={() => startConsult(q.id)}>{q.state === "in_consult" ? "Resume" : "Start"}</button>
                     ) : (
                       <button className="ghost small" onClick={() => { openChart(p.id); addAudit({ actorName: DOCTOR.name, action: "Viewed chart", target: p.fullName, reason: q.reason }); }} aria-label={`Open ${p.fullName}`}><CaretRight size={16} weight="bold" /></button>
                     )}
@@ -139,8 +143,8 @@ function TrustList({ events }: { events: ReturnType<typeof useDemo.getState>["au
 /* ── Patients ─────────────────────────────────────────────────────────────── */
 function Patients() {
   const [q, setQ] = useState("");
-  const { openChart, addAudit } = useDemo();
-  const list = PATIENTS.filter((p) => `${p.fullName} ${p.village} ${p.conditions.join(" ")}`.toLowerCase().includes(q.toLowerCase()));
+  const { openChart, addAudit, patients } = useDemo();
+  const list = patients.filter((p) => `${p.fullName} ${p.village} ${p.conditions.join(" ")}`.toLowerCase().includes(q.toLowerCase()));
   return (
     <div className="portal-page">
       <div className="portal-greet"><h3>Patients</h3><p className="muted">Only patients who have granted you a care relationship appear here. There is no clinic-wide patient search.</p></div>
@@ -169,12 +173,13 @@ function Patients() {
 
 /* ── Chart ────────────────────────────────────────────────────────────────── */
 function Chart() {
-  const { activePatientId, encounters, setPortalTab, queue, startConsult } = useDemo();
-  const p = patientById(activePatientId)!;
+  const { activePatientId, encounters, setPortalTab, queue, startConsult, traces: allTraces } = useDemo();
+  const p = patientById(activePatientId);
+  if (!p) return <div className="portal-page empty-state"><Users size={28} /><h3>Choose a patient.</h3><button className="btn" onClick={() => setPortalTab("patients")}>Patients</button></div>;
   const h = handoverFor(p.id);
   const history = encounters.filter((e) => e.patientId === p.id);
   const live = queue.find((q) => q.patientId === p.id && (q.state === "waiting" || q.state === "in_consult"));
-  const traces = useDemo((s) => s.traces).filter((t) => (t.args as { patient_id?: string }).patient_id === p.id && t.tool === "start_intake");
+  const traces = allTraces.filter((t) => (t.args as { patient_id?: string }).patient_id === p.id && t.tool === "start_intake");
   return (
     <div className="portal-page">
       <button className="ghost small back" onClick={() => setPortalTab("patients")}><ArrowLeft size={14} weight="bold" /> Patients</button>
@@ -195,12 +200,12 @@ function Chart() {
         <div className="chart-main">
           {h && (
             <div className={`glass card handover ${h.suggestedTriage}`}>
-              <div className="card-head"><span className="eyebrow">ARIA handover · unverified</span><span className={`pill ${h.suggestedTriage === "emergency" ? "red" : h.suggestedTriage === "urgent" ? "gold" : "green"}`}>{TRIAGE[h.suggestedTriage]} · {Math.round(h.aiConfidence * 100)}%</span></div>
+              <div className="card-head"><span className="eyebrow">ARIA handover · unverified</span><span className={`pill ${h.suggestedTriage === "emergency" ? "red" : h.suggestedTriage === "urgent" ? "gold" : "green"}`}>{TRIAGE[h.suggestedTriage]} · {confidence(h)}</span></div>
               <h4>{h.chiefComplaint}</h4>
               <p>{h.narrative}</p>
               <div className="vitals">{Object.entries(h.vitals).map(([k, v]) => <span key={k}><small>{k.replace("Bpm", "").replace("respRate", "RR").replace("tempC", "°C")}</small>{v}</span>)}</div>
               <div className="qbadges left">{h.symptoms.map((s) => <span key={s} className="pill">{s}</span>)}{h.redFlags.map((r) => <span key={r} className="pill red"><Warning size={12} weight="fill" /> {r}</span>)}</div>
-              <p className="muted small">Duration {h.durationText} · in {h.language}</p>
+              <p className="muted small">{h.durationText ? `Duration ${h.durationText} · ` : ""}in {h.language} · {fmtDate(h.createdAt)}</p>
             </div>
           )}
           {traces.length > 0 && (
@@ -239,25 +244,60 @@ function Chart() {
 }
 
 /* ── Consult ──────────────────────────────────────────────────────────────── */
+type RxRow = { drug: string; strength: string; frequency: string; durationDays?: number; carried?: boolean };
+
+/**
+ * Medicines still running from the patient's last plan. The newest encounter is the care plan Alexa+ reads, so a
+ * consult for back pain must not silently stop the blood-pressure tablet: they start on the form, and the doctor
+ * removes what they are stopping.
+ */
+function carriedForward(encounters: Encounter[], patientId: string, now = Date.now()): RxRow[] {
+  const last = encounters.filter((e) => e.patientId === patientId).sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0];
+  if (!last) return [];
+  const started = new Date(last.startedAt).getTime();
+  return last.prescriptions
+    .map((r) => ({ r, left: r.durationDays ? Math.ceil((started + r.durationDays * 86_400_000 - now) / 86_400_000) : undefined }))
+    .filter(({ left }) => left === undefined || left > 0)
+    .map(({ r, left }) => ({ drug: r.drug, strength: r.strength ?? "", frequency: r.frequency ?? "", durationDays: left, carried: true }));
+}
+
 function Consult() {
-  const { consultQueueId, queue, fileEncounter, setQueueState, endConsult, openChart, addAudit, setPortalTab } = useDemo();
+  const { consultQueueId, queue, encounters, submitEncounter, endConsult, openChart, setPortalTab } = useDemo();
   const item = queue.find((q) => q.id === consultQueueId) ?? null;
-  const p = item ? patientById(item.patientId)! : null;
-  const h = p ? handoverFor(p.id) : undefined;
+  const p = item ? patientById(item.patientId) ?? null : null;
+  const h = p && item ? handoverFor(p.id, item.handoverId) : undefined;
+  const me = useDemo((s) => s.doctor);
+  const clinicLive = useDemo((s) => s.clinicLive);
   const [acceptAria, setAcceptAria] = useState(true);
-  const [form, setForm] = useState({ chief: "", assessment: "", notes: "", rx: [{ drug: "", strength: "", frequency: "" }], labs: [""], followUp: true, inDays: 14, channel: "video" as Channel, instructions: "" });
+  const [form, setForm] = useState(() => ({ chief: "", assessment: "", notes: "", rx: [...(p ? carriedForward(encounters, p.id) : []), { drug: "", strength: "", frequency: "" }] as RxRow[], labs: [""], followUp: true, inDays: 14, channel: "video" as Channel, instructions: "" }));
   const [inCall, setInCall] = useState(false);
-  useEffect(() => { if (h) setForm((f) => ({ ...f, chief: h.chiefComplaint })); }, [h]);
+  const [saving, setSaving] = useState(false);
+  const [fileError, setFileError] = useState<string | null>(null);
+  // Keyed on the id: the clinic is re-read every few seconds, and a new object must not wipe what the doctor typed.
+  const handoverChief = h?.chiefComplaint;
+  useEffect(() => { if (handoverChief) setForm((f) => ({ ...f, chief: handoverChief })); }, [h?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!item || !p) {
     return <div className="portal-page empty-state"><VideoCamera size={28} /><h3>No consultation open.</h3><p className="muted">Start one from the queue. The ARIA handover and the chart open beside the call.</p><button className="btn" onClick={() => setPortalTab("dashboard")}>Go to the queue</button></div>;
   }
 
-  const file = () => {
-    const rx = form.rx.filter((r) => r.drug.trim()).map((r) => ({ drug: r.drug, strength: r.strength, frequency: r.frequency }));
-    fileEncounter({ id: `enc_${Date.now()}`, patientId: p.id, startedAt: new Date().toISOString(), chiefComplaint: form.chief || item.reason, assessment: form.assessment, notes: form.notes, prescriptions: rx, labs: form.labs.filter(Boolean).map((t) => ({ test: t, priority: "routine" as const })), followUp: form.followUp ? { inDays: form.inDays, channel: form.channel, instructions: form.instructions } : null, doctor: DOCTOR.name });
-    setQueueState(item.id, "completed");
-    addAudit({ actorName: DOCTOR.name, action: "Filed encounter", target: p.fullName, reason: `${rx.length} prescription${rx.length === 1 ? "" : "s"} · ${acceptAria ? "ARIA handover accepted" : "ARIA handover not accepted"}` });
+  const file = async () => {
+    setSaving(true);
+    setFileError(null);
+    const rx = form.rx.filter((r) => r.drug.trim()).map((r) => ({ drug: r.drug.trim(), strength: r.strength.trim() || undefined, frequency: r.frequency.trim() || undefined, durationDays: r.durationDays }));
+    const error = await submitEncounter({
+      consultId: item.id,
+      patientId: p.id,
+      chiefComplaint: (form.chief || item.reason).slice(0, 200),
+      assessment: form.assessment,
+      notes: form.notes,
+      prescriptions: rx,
+      labs: form.labs.map((t) => t.trim()).filter(Boolean).map((t) => ({ test: t, priority: "routine" as const })),
+      followUp: form.followUp ? { inDays: form.inDays, channel: form.channel, instructions: form.instructions || undefined } : null,
+      ariaAccepted: acceptAria,
+    });
+    setSaving(false);
+    if (error) return setFileError(error);
     endConsult();
     openChart(p.id);
   };
@@ -285,8 +325,9 @@ function Consult() {
             <label>Notes &amp; advice<textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Advice to the patient, safety-netting, red-flag guidance…" rows={2} /></label>
             <div className="form-group">
               <span className="eyebrow"><Pill size={12} weight="fill" /> Prescription</span>
+              {form.rx.some((r) => r.carried) && <p className="muted small">Medicines still running from the last plan are carried forward, so Alexa+ keeps reminding about them. Remove any you are stopping.</p>}
               {form.rx.map((r, i) => (
-                <div key={i} className="rx-row">
+                <div key={i} className="rx-row" title={r.carried ? `Carried forward${r.durationDays ? `, ${r.durationDays} days left` : ""}` : undefined}>
                   <input value={r.drug} onChange={(e) => setForm({ ...form, rx: form.rx.map((x, j) => (j === i ? { ...x, drug: e.target.value } : x)) })} placeholder="Drug (e.g. Amlodipine)" />
                   <input value={r.strength} onChange={(e) => setForm({ ...form, rx: form.rx.map((x, j) => (j === i ? { ...x, strength: e.target.value } : x)) })} placeholder="Strength" />
                   <input value={r.frequency} onChange={(e) => setForm({ ...form, rx: form.rx.map((x, j) => (j === i ? { ...x, frequency: e.target.value } : x)) })} placeholder="Frequency" />
@@ -315,20 +356,21 @@ function Consult() {
                 </div>
               )}
             </div>
-            <div className="form-foot"><span className="muted small">Filed under {DOCTOR.registrationNo}. Every field is audited.</span><button className="btn primary" disabled={!form.assessment.trim()} onClick={file}><CheckCircle size={16} weight="bold" /> File consultation</button></div>
+            {fileError && <p className="gate-error" role="alert">{fileError}</p>}
+            <div className="form-foot"><span className="muted small">Filed under {me?.registrationNo ?? DOCTOR.registrationNo}. {clinicLive ? "Saved to the clinic record; Alexa+ reads the new plan at once." : "Every field is audited."}</span><button className="btn primary" disabled={!form.assessment.trim() || saving} onClick={() => void file()}><CheckCircle size={16} weight="bold" /> {saving ? "Filing…" : "File consultation"}</button></div>
           </div>
         </div>
         <aside className="consult-side">
           {h && (
             <div className={`glass card handover ${h.suggestedTriage}`}>
-              <div className="card-head"><span className="eyebrow">ARIA handover</span><span className="pill">{Math.round(h.aiConfidence * 100)}% confidence</span></div>
+              <div className="card-head"><span className="eyebrow">ARIA handover</span><span className="pill">{confidence(h)}</span></div>
               <h4>{h.chiefComplaint}</h4>
               <p className="small">{h.narrative}</p>
               <div className="vitals">{Object.entries(h.vitals).map(([k, v]) => <span key={k}><small>{k.replace("Bpm", "").replace("respRate", "RR").replace("tempC", "°C")}</small>{v}</span>)}</div>
               {h.redFlags.length > 0 && <div className="qbadges left">{h.redFlags.map((r) => <span key={r} className="pill red"><Warning size={12} weight="fill" /> {r}</span>)}</div>}
             </div>
           )}
-          {item.source === "alexa" && <div className="glass card"><span className="eyebrow">Source</span><p className="small">Escalated by Alexa+ through nirog-mcp. The rules-based triage, not the model, raised the level.</p></div>}
+          {item.source === "alexa" && <div className="glass card"><span className="eyebrow">Source</span><p className="small">{item.reason.startsWith("Alexa+ intake") ? "Sent by Alexa+ through nirog-mcp when the intake finished, with the handover attached." : "Escalated by Alexa+ through nirog-mcp. The rules-based triage, not the model, set the level."}</p></div>}
           <div className="glass card"><span className="eyebrow">Allergies</span><p>{p.allergies.length ? p.allergies.join(", ") : "None recorded"}</p><span className="eyebrow">Current medicines</span><p>{p.medications.length ? p.medications.join(", ") : "None"}</p></div>
         </aside>
       </div>
@@ -356,12 +398,13 @@ function Trust() {
 /* ── Settings ─────────────────────────────────────────────────────────────── */
 function Settings() {
   const [mfa, setMfa] = useState(true);
+  const clinicLive = useDemo((s) => s.clinicLive);
   return (
     <div className="portal-page">
       <div className="portal-greet"><h3>Settings</h3><p className="muted">{DOCTOR.name} · {DOCTOR.specialty} · {DOCTOR.registrationNo}</p></div>
       <div className="settings-grid">
         <div className="glass card"><span className="eyebrow">Consultation languages</span><div className="qbadges left">{DOCTOR.languages.map((l) => <span key={l} className="pill green">{l}</span>)}<span className="pill">+ Add</span></div><p className="muted small">Patients are matched to doctors who speak their language first.</p></div>
-        <div className="glass card"><span className="eyebrow">Data source</span><p>nirog-mcp · <span className="muted">mock patients, live memory</span></p><p className="muted small">Switch to Supabase by setting NIROG_DATA_SOURCE on the server. The portal never touches a database directly.</p></div>
+        <div className="glass card"><span className="eyebrow">Data source</span><p>nirog-mcp · <span className="muted">{clinicLive ? "Supabase, live clinic record" : "built-in demo clinic"}</span></p><p className="muted small">{clinicLive ? "Every read and write goes through the server, which holds the only database key. The portal never touches the database directly." : "The server has no database configured, so this page keeps its changes in this tab."}</p></div>
         <div className="glass card oncall"><span className="tile-icon small"><Lock size={16} weight="duotone" /></span><div><b>Two-factor authentication</b><p className="muted small">Required for prescribing. Authenticator app, backup codes issued.</p></div><button role="switch" aria-checked={mfa} className={`switch ${mfa ? "on" : ""}`} onClick={() => setMfa(!mfa)}><span /></button></div>
         <div className="glass card"><span className="eyebrow">Clinic</span><p>{DOCTOR.clinic}</p><p className="muted small">Barabanki district, Uttar Pradesh · On-demand pool shared with 2 other doctors.</p></div>
       </div>

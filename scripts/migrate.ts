@@ -2,6 +2,8 @@
  * Create the memory tables and the clinic schema on MEMORY_DATABASE_URL, seed the demo clinic,
  * and seed the complaint history. Idempotent: rerun it to reset today's demo queue.
  *
+ *   pnpm db:reset -- --yes   first deletes everything demo runs created (supabase/reset-demo.sql), then reseeds
+ *
  *   pnpm db:migrate
  */
 import { readFileSync } from "node:fs";
@@ -14,6 +16,11 @@ import { remember } from "../src/memory/recall.js";
 const url = process.env.MEMORY_DATABASE_URL;
 if (!url) {
   console.error("MEMORY_DATABASE_URL is not set. Add it to .env (Supabase: Project Settings > Database > Connection string, URI, Session mode).");
+  process.exit(1);
+}
+const reset = process.argv.includes("--reset");
+if (reset && !process.argv.includes("--yes")) {
+  console.error("db:reset deletes every consult, handover, encounter, dose and complaint the demo created. Rerun with: pnpm db:reset -- --yes");
   process.exit(1);
 }
 const flavour = (process.env.MEMORY_PG_FLAVOUR as PgFlavour) ?? "pgvector";
@@ -30,7 +37,9 @@ console.log("  ok  memory schema");
 if (flavour === "pgvector") {
   const db = new pg.Client({ connectionString: url });
   await db.connect();
-  for (const f of ["supabase/migrations/0001_clinic.sql", "supabase/seed.sql"]) {
+  const files = ["supabase/migrations/0001_clinic.sql", "supabase/reset-demo.sql", "supabase/seed.sql"];
+  if (!reset) files.splice(1, 1);
+  for (const f of files) {
     await db.query(readFileSync(f, "utf8"));
     console.log(`  ok  ${f}`);
   }

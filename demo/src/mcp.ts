@@ -28,11 +28,32 @@ export function saveSettings(s: Settings) {
   }
 }
 
+export interface DemoAccess {
+  consentToken: string;
+  doctorSession: string;
+}
+
+let demo: Promise<DemoAccess | null> | null = null;
+/**
+ * On the public demo deployment the server hands out a short-lived consent token for the demo household and a demo
+ * doctor session. Anywhere else /auth/demo is a 404 and this is null. Fetched once per page load, never stored.
+ */
+export function demoAccess(): Promise<DemoAccess | null> {
+  // Ask only a server that wants tokens, so an open development server is not asked for something it does not have.
+  demo ??= fetch(`${location.origin}/health`)
+    .then((r) => (r.ok ? (r.json() as Promise<{ auth?: string }>) : null))
+    .then((h) => (h?.auth === "consent-token" ? fetch(`${location.origin}/auth/demo`) : null))
+    .then((r) => (r?.ok ? (r.json() as Promise<DemoAccess>) : null))
+    .catch(() => null);
+  return demo;
+}
+
 /** One stateless client per call: the server is stateless too, and auth changes apply immediately. */
 export async function callTool(settings: Settings, tool: string, args: Record<string, unknown>): Promise<{ result?: unknown; error?: string; ms: number }> {
   const started = performance.now();
   const client = new Client({ name: "nirog-demo", version: "0.1.0" });
-  const headers: Record<string, string> = settings.token ? { authorization: `Bearer ${settings.token}` } : {};
+  const token = settings.token || (await demoAccess())?.consentToken;
+  const headers: Record<string, string> = token ? { authorization: `Bearer ${token}` } : {};
   const transport = new StreamableHTTPClientTransport(new URL(settings.endpoint), { requestInit: { headers } });
   try {
     await client.connect(transport);

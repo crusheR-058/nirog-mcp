@@ -7,6 +7,9 @@ said months ago however differently they worded it, asks the two or three questi
 doctor a real history. If it sounds dangerous, a fixed table of rules, not a model, tells them to call an
 ambulance and puts them at the top of the on-call doctor's queue.
 
+The loop closes. The handover lands in the doctor's queue; the doctor files a prescription in the portal; that
+evening Alexa+ reads the new plan back and logs each dose, refusing a double one.
+
 It is a self-hosted **MCP server** (Streamable HTTP) plus an **Agent Skill**, built for the Alexa+ track of the
 Build, Ship, Shape: Amazon Developer Hackathon. It also ships a web page that simulates the Alexa+ experience
 against the real server, and the doctor's side of the same consultation.
@@ -14,7 +17,7 @@ against the real server, and the doctor's side of the same consultation.
 ```
 Alexa+ ──MCP / Streamable HTTP──▶ nirog-mcp ──▶ clinical memory (in-process | Postgres + pgvector)
                                       │      ──▶ Amazon Bedrock (GPT-OSS 120B for questions, Titan Embed v2 for recall)
-                                      │      ──▶ care data (built-in demo set | Supabase)
+                                      │      ──▶ clinic record (built-in demo set | Supabase, RLS on, append-only trust log)
 Doctor portal ──/api/clinic──────────┘          one trust log, written by every tool call
 ```
 
@@ -36,7 +39,7 @@ demo history, an offline embedder, and ARIA's questions from Amazon Bedrock if y
 (set `ARIA_MODEL=off` to use the built-in fallback questions instead).
 
 ```bash
-pnpm test           # 74 tests, offline, about a second
+pnpm test           # 79 tests, offline, a few seconds
 pnpm typecheck
 ```
 
@@ -44,10 +47,10 @@ pnpm typecheck
 
 | Tool | What it does |
 |---|---|
-| `start_intake` | Records the complaint unedited, recalls earlier complaints that meant the same thing, resolves the body region (inheriting it from memory when the sentence names none), runs the recurrence rule and the triage rules, and returns ARIA's next question or a handover summary. |
-| `report_red_flag` | Rules-based triage. On an emergency: speaks the 108 ambulance advice, queues a consult for the on-call doctor, alerts the family contact. |
+| `start_intake` | Records the complaint unedited, recalls earlier complaints that meant the same thing, resolves the body region (inheriting it from memory when the sentence names none), runs the recurrence rule and the triage rules, and returns ARIA's next question or a handover summary. A finished intake saves the handover for the doctor and queues the visit (urgent when the complaint keeps recurring). |
+| `report_red_flag` | Rules-based triage. On an emergency: speaks the 108 ambulance advice, queues a consult for the on-call doctor with the patient's words and the rule that fired, alerts the family contact by name. |
 | `get_care_plan` | Active medicines with times of day, pending tests, when the follow-up is due. |
-| `log_dose_taken` | Records a dose and refuses a double dose: once today's scheduled doses are on record it says so. Days are counted in the clinic's time zone. |
+| `log_dose_taken` | Records a dose and refuses a double dose: a second dose in the same part of the day, or any dose once today's are all on record. Days are counted in the clinic's time zone. |
 | `get_family_summary` | A caregiver's view of the last few days: complaint counts by body region, whether a pattern is forming, doses recorded against doses expected. Counts only, never the patient's words. |
 | `ping` | Health check. |
 
@@ -91,10 +94,13 @@ Copy `.env.example` to `.env`. Everything is optional.
 | `GOOGLE_CLIENT_ID` | unset | Enables Google sign-in on the doctor page. |
 | `CLINIC_INVITE_CODE`, `DOCTOR_ALLOWLIST` | demo values | One-time doctor verification. |
 | `CLINIC_UTC_OFFSET_MINUTES` | `330` (IST) | The clock doses are counted on. |
+| `PUBLIC_DEMO` | unset | `1` on the hackathon deployment only: visitors get a 6-hour consent token for the fictional demo household and a demo doctor session, and `/mcp` is rate-limited per address. Never with real patients. |
 
 For Supabase: `pnpm db:migrate` creates the memory and clinic tables, seeds the demo clinic and history, and
 resets today's queue when rerun. `pnpm verify` checks the connection, runs a live recall, reads the clinic data,
-and confirms the public key is blocked and the trust log refuses edits.
+and confirms the public key is blocked and the trust log refuses edits. Before recording a demo,
+`pnpm db:reset -- --yes` deletes what earlier runs created (consults, handovers, encounters, doses, complaints) and
+reseeds; the trust log is append-only and keeps its history.
 
 ## Consent and sign-in
 
@@ -118,8 +124,10 @@ an allowlist. The server issues a signed 30-day session, so later visits need on
 - **Memory.** A node graph of one patient's complaints, joined by the real cosine distances.
 - **Case file.** The recurrence verdict, the SBAR handover the doctor reads, a timeline in the patient's words.
 - **Doctor portal.** Queue sorted by triage, patients, chart, a consultation form that files an encounter, the
-  trust log, settings. It reads `/api/clinic`, so a consult escalated by voice in one browser appears in the
-  doctor's queue in another.
+  trust log, settings. With Supabase behind the server it reads and writes the live clinic through `/api/clinic`:
+  the handover Alexa+ saved opens beside the consult, the medicines still running are carried forward on the form,
+  and the filed plan is what Alexa+ reads next. Without a database it shows a built-in clinic and keeps changes in
+  the tab.
 - **Talk.** The conversation beside a trace of every tool call and what it returned.
 
 ```bash
@@ -135,7 +143,8 @@ bash deploy/iam.sh         # once, as an account admin: two roles (ECR pull; Bed
 bash deploy/apprunner.sh   # build, push, create or update the service, wait, print the HTTPS endpoint
 ```
 
-The second script refuses to deploy without `NIROG_TOKEN_SECRET`.
+The second script refuses to deploy without `NIROG_TOKEN_SECRET`. It forwards the Supabase settings and
+`PUBLIC_DEMO` from `.env`, so the deployed page works for a visitor with no Alexa+ account and no clinic login.
 
 ## Known limits
 
@@ -154,7 +163,10 @@ Stated plainly, because a clinical tool that overstates itself is worse than one
 - **The model sometimes asks two things at once.** The number of questions is enforced in code (two at least,
   three at most). Their wording is not: in our last run 1 of 38 model-written lines joined two questions with
   "and". One call in an earlier run of 44 returned no usable answer; the built-in question was spoken instead.
-- **Alerts are recorded, not sent.** The family-contact alert writes a trust-log entry. There is no SMS gateway.
+- **Alerts are recorded, not sent.** The family-contact alert names the household's contact and writes a
+  trust-log entry. There is no SMS gateway.
+- **The public demo is open by design.** With `PUBLIC_DEMO=1` anyone can read and write the fictional demo clinic,
+  within a per-address rate limit. Real deployments leave it off and mint tokens per household.
 - **The call room has no signalling server.** It captures your camera and microphone and shows the waiting
   state; there is no second peer.
 

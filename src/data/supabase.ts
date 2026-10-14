@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { AuditRecord, ConsultRecord, ConsultRequest, DoseRecord, EncounterRecord, NirogData, PatientRecord } from "./types.js";
+import type { AuditRecord, ClinicSnapshot, ConsultRecord, ConsultRequest, DoseRecord, EncounterRecord, NewEncounter, NewHandover, NirogData, PatientRecord } from "./types.js";
 
 const PATIENT_COLS = "id, full_name, preferred_language, allergies, conditions, current_medications";
 
@@ -83,6 +83,7 @@ export class SupabaseData implements NirogData {
         channel: "audio",
         source: "alexa",
         reason: req.reason.slice(0, 500),
+        handover_id: req.handoverId ?? null,
         red_flag_count: req.triage === "routine" ? 0 : 1,
         checked_in_at: req.now.toISOString(),
         scheduled_for: req.now.toISOString(),
@@ -158,5 +159,108 @@ export class SupabaseData implements NirogData {
       .order("taken_at", { ascending: true });
     if (error) throw new Error(`Dose list failed: ${error.message}`);
     return (data ?? []).map((r) => ({ id: r.id, patientId: r.patient_id, drug: r.drug, slot: r.slot, takenAt: r.taken_at }));
+  }
+
+  async saveHandover(h: NewHandover): Promise<string> {
+    const { data, error } = await this.client
+      .from("handover")
+      .insert({
+        patient_id: h.patientId,
+        created_at: h.now.toISOString(),
+        chief_complaint: h.chiefComplaint.slice(0, 200),
+        narrative: h.narrative.slice(0, 2000),
+        symptoms: h.symptoms.slice(0, 8),
+        red_flags: h.redFlags.slice(0, 8),
+        suggested_triage: h.triage,
+        language: h.language,
+      })
+      .select("id")
+      .single();
+    if (error) throw new Error(`Handover save failed: ${error.message}`);
+    return data.id;
+  }
+
+  async clinicSnapshot(): Promise<ClinicSnapshot> {
+    const dayAgo = new Date(Date.now() - 86_400_000).toISOString();
+    const [patients, doctors, handovers, queue, encounters] = await Promise.all([
+      this.client.from("patient").select("*").order("full_name"),
+      this.client.from("doctor").select("*").order("name"),
+      this.client.from("handover").select("*").order("created_at", { ascending: false }).limit(100),
+      // Today's clinic: everything still open, plus whatever closed in the last day.
+      this.client.from("consult").select("*").or(`state.neq.completed,checked_in_at.gte.${dayAgo}`).order("checked_in_at", { ascending: false }).limit(100),
+      this.client.from("encounter").select("*, doctor:doctor_id (name)").not("ended_at", "is", null).order("started_at", { ascending: false }).limit(200),
+    ]);
+    for (const r of [patients, doctors, handovers, queue, encounters]) if (r.error) throw new Error(`Clinic snapshot failed: ${r.error.message}`);
+    return {
+      patients: (patients.data ?? []).map((p) => ({
+        id: p.id, fullName: p.full_name, sex: p.sex ?? "", dateOfBirth: p.date_of_birth ?? "", village: p.village ?? "", district: p.district ?? "",
+        language: p.preferred_language, abha: p.abha_linked, relationship: p.relationship, allergies: p.allergies, conditions: p.conditions,
+        medications: p.current_medications, consent: p.consent,
+      })),
+      doctors: (doctors.data ?? []).map((d) => ({
+        id: d.id, name: d.name, spec: d.specialty, exp: d.experience_years ?? 0, rating: Number(d.rating ?? 0), fee: d.fee_inr ?? 0, online: d.online, langs: d.languages.join(", "),
+      })),
+      handovers: (handovers.data ?? []).map((h) => ({
+        id: h.id, patientId: h.patient_id, createdAt: h.created_at, chiefComplaint: h.chief_complaint, narrative: h.narrative, durationText: h.duration_text ?? "",
+        symptoms: h.symptoms, redFlags: h.red_flags, vitals: h.vitals ?? {}, aiConfidence: h.ai_confidence == null ? null : Number(h.ai_confidence),
+        suggestedTriage: h.suggested_triage, language: h.language,
+      })),
+      queue: (queue.data ?? []).map((q) => ({
+        id: q.id, patientId: q.patient_id, kind: q.kind, triage: q.triage, state: q.state, checkedInAt: q.checked_in_at, scheduledFor: q.scheduled_for,
+        channel: q.channel, reason: q.reason, handoverId: q.handover_id ?? undefined, quality: q.connection ?? "fair", redFlagCount: q.red_flag_count, source: q.source,
+      })),
+      encounters: (encounters.data ?? []).map((e) => ({
+        id: e.id, patientId: e.patient_id, startedAt: e.started_at, chiefComplaint: e.chief_complaint, assessment: e.assessment, notes: e.clinical_notes,
+        prescriptions: e.prescriptions ?? [], labs: e.lab_requests ?? [], followUp: e.follow_up ?? null,
+        doctor: (e.doctor as { name: string } | null)?.name ?? "Unsigned (development mode)",
+      })),
+    };
+  }
+
+  private async doctorId(registrationNo: string | null): Promise<string | null> {
+    if (!registrationNo) return null;
+    const { data, error } = await this.client.from("doctor").select("id").eq("registration_no", registrationNo).maybeSingle();
+    if (error) throw new Error(`Doctor lookup failed: ${error.message}`);
+    return data?.id ?? null;
+  }
+
+  async startConsult(consultId: string, doctorRegistrationNo: string | null): Promise<boolean> {
+    const doctorId = await this.doctorId(doctorRegistrationNo);
+    const { data, error } = await this.client
+      .from("consult")
+      .update({ state: "in_consult", ...(doctorId ? { doctor_id: doctorId } : {}) })
+      .eq("id", consultId)
+      .neq("state", "completed")
+      .select("id");
+    if (error) throw new Error(`Starting the consult failed: ${error.message}`);
+    return (data ?? []).length > 0;
+  }
+
+  async fileEncounter(e: NewEncounter): Promise<string> {
+    const doctorId = await this.doctorId(e.doctorRegistrationNo);
+    const { data, error } = await this.client
+      .from("encounter")
+      .insert({
+        patient_id: e.patientId,
+        doctor_id: doctorId,
+        consult_id: e.consultId,
+        started_at: e.now.toISOString(),
+        ended_at: e.now.toISOString(),
+        chief_complaint: e.chiefComplaint,
+        assessment: e.assessment,
+        clinical_notes: e.clinicalNotes,
+        prescriptions: e.prescriptions,
+        lab_requests: e.labRequests,
+        follow_up: e.followUp,
+      })
+      .select("id")
+      .single();
+    if (error) throw new Error(`Filing the encounter failed: ${error.message}`);
+    if (e.consultId) {
+      const done = await this.client.from("consult").update({ state: "completed", ...(doctorId ? { doctor_id: doctorId } : {}) }).eq("id", e.consultId);
+      // The encounter is the record; a consult left open is visible in the queue and can be closed again.
+      if (done.error) console.error(`[clinic] encounter ${data.id} filed but consult ${e.consultId} not closed: ${done.error.message}`);
+    }
+    return data.id;
   }
 }

@@ -79,8 +79,9 @@ describe("start_intake", () => {
     ];
     // The model tries to slip in something the patient never said.
     const converse = async () => '{"reply":"I am sending this to the doctor.","complete":true,"summary":"Seeks relief with rest or medication.","redFlag":false,"flags":[]}';
+    const data = new MockData();
     const result = await runIntake(
-      { data: new MockData(), store, embedder: offlineEmbedder, converse },
+      { data, store, embedder: offlineEmbedder, converse },
       { patientId: "pat_rahul", complaint: "no, nothing else", transcript, now: new Date(NOW.getTime() + 120_000) },
     );
     if ("error" in result || !("reply" in result.aria)) throw new Error("no reply");
@@ -91,8 +92,15 @@ describe("start_intake", () => {
     expect(summary).toContain(`"${first}"`);
     expect(summary).toContain('"worse in the mornings and when I bend to lift water"');
     expect(summary).toContain("Pattern: recurrent, 3 visits in 38 days.");
-    expect(summary).toContain("Triage: routine.");
+    expect(summary).toContain("Triage: urgent (routine by symptoms; raised for the recurring pattern).");
     expect(summary).not.toContain("Seeks relief");
+
+    // The handover is saved for the doctor and the visit is queued with it. The recurring pattern makes it urgent.
+    expect(data.handovers).toHaveLength(1);
+    expect(data.handovers[0]).toMatchObject({ patientId: "pat_rahul", chiefComplaint: "Lower back, 3 visits in 38 days", narrative: summary, triage: "urgent" });
+    expect(data.handovers[0].redFlags).toEqual(["Recurrent: 3 visits in 38 days"]);
+    expect(data.consults).toEqual([expect.objectContaining({ patientId: "pat_rahul", triage: "urgent", handoverId: data.handovers[0].id })]);
+    expect(result.handover).toMatchObject({ id: data.handovers[0].id, consultId: data.consults[0].id, triage: "urgent" });
   });
 
   it("says the pattern was not checked when memory is down", async () => {

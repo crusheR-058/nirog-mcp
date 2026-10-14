@@ -41,7 +41,13 @@ export const PATIENTS: Patient[] = [
   { id: "pat_lakshmi", fullName: "Lakshmi Bai", sex: "female", dateOfBirth: "1951-07-18", village: "Sultanpur", district: "Barabanki, UP", language: "Hindi", abha: true, relationship: "parent", allergies: [], conditions: ["Osteoarthritis", "Hypertension"], medications: ["Telmisartan 40mg OD"], tone: "green", consent: "active" },
 ];
 
-export const patientById = (id: string) => PATIENTS.find((p) => p.id === id);
+/** A patient's avatar colour: the demo's own for the seeded clinic, a stable pick for anyone added since. */
+export function toneFor(id: string): Tone {
+  const known = PATIENTS.find((p) => p.id === id)?.tone;
+  if (known) return known;
+  const palette: Tone[] = ["blue", "indigo", "green", "amber", "aria"];
+  return palette[[...id].reduce((a, c) => a + c.charCodeAt(0), 0) % palette.length];
+}
 export const ageOf = (p: Patient, now = new Date()) => Math.floor((now.getTime() - new Date(p.dateOfBirth).getTime()) / (365.25 * 86_400_000));
 export const initials = (name: string) => name.split(" ").map((w) => w[0]).slice(0, 2).join("");
 
@@ -55,7 +61,8 @@ export interface Handover {
   symptoms: string[];
   redFlags: string[];
   vitals: Record<string, number>;
-  aiConfidence: number;
+  /** Null for a handover assembled by rules, which has no model confidence to report. */
+  aiConfidence: number | null;
   suggestedTriage: Triage;
   language: string;
 }
@@ -68,7 +75,6 @@ export const HANDOVERS: Handover[] = [
   { id: "aria_imran", patientId: "pat_imran", createdAt: "2026-10-07T03:58:00.000Z", chiefComplaint: "Asthma flare after dust exposure", narrative: "Reports wheeze and cough since threshing work yesterday. Using inhaler more than usual (6+ times/day) with partial relief. Able to speak in full sentences. No cyanosis reported.", durationText: "1 day", symptoms: ["Wheeze", "Cough", "Increased inhaler use"], redFlags: ["Inhaler use >6×/day"], vitals: { pulseBpm: 96, spo2: 95, respRate: 20 }, aiConfidence: 0.84, suggestedTriage: "urgent", language: "Hindi" },
 ];
 
-export const handoverFor = (patientId: string) => HANDOVERS.find((h) => h.patientId === patientId);
 
 export interface QueueItem {
   id: string;
@@ -136,7 +142,18 @@ export function seedAudit(now: Date): AuditEvent[] {
   ];
 }
 
-export const DOCTORS = [
+export interface Doctor {
+  id: string;
+  name: string;
+  spec: string;
+  exp: number;
+  rating: number;
+  fee: number;
+  online: boolean;
+  langs: string;
+}
+
+export const DOCTORS: Doctor[] = [
   { id: "doc_ananya", name: "Dr. Ananya Rao", spec: "General Physician", exp: 11, rating: 4.8, fee: 249, online: true, langs: "Hindi, English" },
   { id: "doc_imran", name: "Dr. Imran Sheikh", spec: "Orthopaedics", exp: 14, rating: 4.7, fee: 399, online: true, langs: "Hindi, Urdu, English" },
   { id: "doc_kavya", name: "Dr. Kavya Menon", spec: "Internal Medicine", exp: 8, rating: 4.9, fee: 299, online: false, langs: "Malayalam, English" },

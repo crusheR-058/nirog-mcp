@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { patientById } from "../clinic/data";
 import { callTool, loadSettings, saveSettings, type Settings } from "../mcp";
 import { canListen, listenOnce, speak, stopSpeaking } from "../speech";
-import { refreshLive, useDemo, type Level } from "../store";
+import { patientById, refreshLive, useDemo, type Level } from "../store";
 
 /* Which tool does this sentence want? A real Alexa+ agent decides this from the tool descriptions; the demo page uses plain patterns. */
 const SYMPTOM = /pain|ache|hurt|fever|cough|dizzy|bleed|breath|vomit|sweat|faint|दर्द|बुखार|सांस|साँस|खांसी|खाँसी|चक्कर|उल्टी|पसीना|बेहोश|तकलीफ़|तकलीफ/i;
@@ -41,6 +40,8 @@ export function summarize(tool: string, r: unknown): string[] {
     if (a?.error) out.push(`aria: ${a.error}`);
     else if (a) out.push(`aria: ${a.model}${a.complete ? " · handover" : ""}${a.redFlag ? " · red flag" : ""}`);
     if (a?.summary) out.push(`summary for the doctor: ${a.summary}`);
+    const h = o.handover as { consultId: string | null; triage: string } | null;
+    if (h) out.push(`handover saved for the doctor${h.consultId ? ` · ${h.triage} consult queued` : ""}`);
     const mem = o.memory as { degraded: boolean; embedProvider: string; latencyMs: number };
     if (mem) out.push(`memory: ${mem.degraded ? "DEGRADED" : mem.embedProvider} · ${mem.latencyMs} ms`);
   } else if (tool === "report_red_flag") {
@@ -168,6 +169,15 @@ export function useConversation() {
           }
           await say(rf.spoken, rf.level);
         } else setPhase("idle");
+      }
+      // A finished routine intake queues itself for the doctor, with the handover attached.
+      const handover = res.handover as { consultId: string | null; triage: Level } | null | undefined;
+      if (handover?.consultId) {
+        bump("consults");
+        if (local) {
+          addQueue({ id: handover.consultId, patientId: pid, kind: "new", triage: handover.triage, state: "waiting", checkedInAt: new Date().toISOString(), scheduledFor: new Date().toISOString(), channel: "audio", reason: "Alexa+ intake", quality: "fair", redFlagCount: 0, source: "alexa" });
+          addAudit({ actorName: "Alexa+ (nirog-mcp)", action: "Queued consult", target: who, reason: `${handover.triage} · intake complete · handover attached` });
+        }
       }
       if (aria?.complete) setComplete(true);
       // A finished or escalated intake is closed: the next symptom starts a fresh one.

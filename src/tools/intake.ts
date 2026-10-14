@@ -25,6 +25,11 @@ export interface IntakeResult {
   aria: (AriaResult & { model: string }) | { error: string };
   /** Rules-based triage of this complaint. When not routine, call report_red_flag to escalate. */
   triage: { level: TriageLevel; matched: string[] };
+  /**
+   * Set once the intake is complete: the handover saved for the doctor and, for a routine complaint, the consult it
+   * queued. Anything the rules flag is queued by report_red_flag instead, so it is never queued twice.
+   */
+  handover: { id: string; consultId: string | null; triage: TriageLevel } | null;
   language: Lang;
   spoken: string;
 }
@@ -39,6 +44,8 @@ export function handoverSummary(p: {
   regionSource: string;
   recurrence: { level: string; visitCount: number; spanDays: number } | null;
   triage: TriageLevel;
+  /** Set when the visit is queued above its symptoms' level because the complaint keeps coming back. */
+  raisedForPattern?: boolean;
   memoryDegraded: boolean;
 }): string {
   const quotes = p.said.slice(-6).map((s) => `"${s.trim()}"`).join("; ");
@@ -50,7 +57,7 @@ export function handoverSummary(p: {
       : p.recurrence
         ? `Pattern: ${p.recurrence.level}, ${p.recurrence.visitCount} visits in ${p.recurrence.spanDays} days.`
         : "Pattern: none found in the recorded history.",
-    `Triage: ${p.triage}.`,
+    p.raisedForPattern ? `Triage: urgent (routine by symptoms; raised for the recurring pattern).` : `Triage: ${p.triage}.`,
     "Assembled by rules from the patient's own words. Not a diagnosis.",
   ];
   return parts.join(" ");
@@ -109,6 +116,8 @@ export async function runIntake(
   const recallAsks = openingTurn && Boolean(recallLine) && !r.degraded;
   if (recallAsks && "reply" in aria && !aria.redFlag) aria = { ...aria, reply: recallLine!, complete: false };
 
+  // A recurring complaint is queued as urgent: the pattern is the finding.
+  const queueLevel: TriageLevel = t.level === "routine" && flag?.level === "recurrent" ? "urgent" : t.level;
   if ("reply" in aria) {
     aria = {
       ...aria,
@@ -119,6 +128,7 @@ export async function runIntake(
             regionSource: visitSource,
             recurrence: flag ? { level: flag.level, visitCount: flag.visitCount, spanDays: flag.spanDays } : null,
             triage: t.level,
+            raisedForPattern: queueLevel !== t.level,
             memoryDegraded: r.degraded,
           })
         : null,
@@ -131,6 +141,33 @@ export async function runIntake(
       : said === recallLine
         ? said
         : [openingTurn ? recallLine : null, said].filter(Boolean).join(" ");
+
+  // A finished intake goes to the doctor. The patient's words are in the narrative; the chips carry only the flags.
+  let handover: IntakeResult["handover"] = null;
+  if ("reply" in aria && aria.complete && aria.summary && t.level !== "emergency") {
+    const level = queueLevel;
+    try {
+      const id = await deps.data.saveHandover({
+        patientId: patient.id,
+        chiefComplaint: `${REGION_LABELS[visitRegion]}${flag ? `, ${flag.visitCount} visits in ${flag.spanDays} days` : ""}`,
+        narrative: aria.summary,
+        symptoms: [],
+        redFlags: [...(flag ? [`${flag.level[0].toUpperCase()}${flag.level.slice(1)}: ${flag.visitCount} visits in ${flag.spanDays} days`] : []), ...t.matched.map((m) => m.label)],
+        triage: level,
+        language: lang === "hi" ? "Hindi" : "English",
+        now,
+      });
+      let consultId: string | null = null;
+      if (t.level === "routine" && !aria.redFlag) {
+        consultId = await deps.data.requestConsult({ patientId: patient.id, triage: level, reason: `Alexa+ intake: ${REGION_LABELS[visitRegion].toLowerCase()}`, now, handoverId: id });
+        await audit(deps.data, "Queued consult", patient.fullName, `${level} · intake complete · handover attached`);
+      }
+      handover = { id, consultId, triage: level };
+    } catch (err) {
+      // The patient has already been answered; a lost handover is logged, not spoken.
+      console.error("[intake] handover not saved:", err instanceof Error ? err.message : String(err));
+    }
+  }
 
   await audit(
     deps.data,
@@ -154,6 +191,7 @@ export async function runIntake(
     memory: { degraded: r.degraded, reason: r.degradedReason, embedProvider: r.embedProvider, latencyMs: r.latencyMs },
     aria,
     triage: { level: t.level, matched: t.matched.map((m) => m.id) },
+    handover,
     language: lang,
     spoken,
   };

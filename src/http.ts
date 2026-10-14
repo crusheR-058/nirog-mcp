@@ -43,6 +43,28 @@ async function handleMcp(req: Request, res: Response) {
   await transport.handleRequest(req, res, req.body);
 }
 
+// The public demo hands out tokens to anyone, and /mcp calls a paid model, so each address gets a budget.
+// shortcut: per-process memory, so the limit is per instance; use a shared store if the service scales out.
+if (process.env.PUBLIC_DEMO === "1") {
+  const hits = new Map<string, { n: number; reset: number }>();
+  // App Runner puts one proxy in front; without this every visitor shares the proxy's address and one budget.
+  app.set("trust proxy", 1);
+  // Each tool call is three or four HTTP requests (initialize, initialized, call), so 300 is roughly 80 tool calls.
+  const LIMIT = 300, WINDOW_MS = 10 * 60_000;
+  app.use(["/mcp", "/auth/demo"], (req, res, next) => {
+    const key = req.ip ?? "unknown";
+    const now = Date.now();
+    const h = hits.get(key);
+    if (!h || h.reset < now) hits.set(key, { n: 1, reset: now + WINDOW_MS });
+    else if (++h.n > LIMIT) {
+      res.status(429).json({ error: "Too many requests from this address. Please wait a few minutes and try again." });
+      return;
+    }
+    if (hits.size > 10_000) for (const [k, v] of hits) if (v.reset < now) hits.delete(k);
+    next();
+  });
+}
+
 // Doctor sign-in for the portal page: Google, then one-time verification.
 app.use("/auth", authRoutes());
 

@@ -12,6 +12,19 @@ describe("report_red_flag", () => {
     expect(r.consultId).toBeTruthy();
     expect(r.spoken).toContain("108");
     expect(data.consults[0]).toMatchObject({ patientId: "pat_rahul", triage: "emergency" });
+    // The doctor opens the consult with the patient's words and the rule that fired.
+    expect(data.consults[0].handoverId).toBe(data.handovers[0].id);
+    expect(data.handovers[0].narrative).toContain('Said: "chest pain and sweating a lot"');
+    expect(data.handovers[0].redFlags[0]).toMatch(/Chest pain/);
+  });
+
+  it("still escalates when the handover cannot be saved", async () => {
+    const data = new MockData();
+    data.saveHandover = async () => { throw new Error("database down"); };
+    const r = await runRedFlag(data, { patientId: "pat_rahul", symptoms: "chest pain and sweating a lot" });
+    if ("error" in r) throw new Error(r.error);
+    expect(r.actions.map((a) => a.type)).toEqual(["emergency_advice", "consult_requested", "caregiver_alerted"]);
+    expect(data.consults[0].handoverId).toBeUndefined();
   });
 
   it("queues an urgent consult without emergency advice", async () => {

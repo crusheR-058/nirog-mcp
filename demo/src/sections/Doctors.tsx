@@ -1,5 +1,4 @@
 import { Star, VideoCamera } from "@phosphor-icons/react";
-import { DOCTORS } from "../clinic/data";
 import { useDemo } from "../store";
 import { CallRoom } from "../clinic/CallRoom";
 
@@ -7,10 +6,11 @@ export function Doctors() {
   const callDoctorId = useDemo((s) => s.callDoctorId);
   const setCallDoctor = useDemo((s) => s.setCallDoctor);
   const addAudit = useDemo((s) => s.addAudit);
-  const doctor = DOCTORS.find((d) => d.id === callDoctorId) ?? null;
+  const doctors = useDemo((s) => s.doctors);
+  const doctor = doctors.find((d) => d.id === callDoctorId) ?? null;
 
   const call = (id: string) => {
-    const d = DOCTORS.find((x) => x.id === id)!;
+    const d = doctors.find((x) => x.id === id)!;
     setCallDoctor(id);
     addAudit({ actorName: "Rahul Yadav", action: "Requested consult", target: d.name, reason: "Patient-initiated call from the case file" });
   };
@@ -23,7 +23,7 @@ export function Doctors() {
         <p className="lede">They open the call with your history already on screen, so the first two minutes are not spent repeating yourself.</p>
       </header>
       <ul className="doc-grid">
-        {DOCTORS.map((d) => (
+        {doctors.map((d) => (
           <li key={d.id} className="glass card doc">
             <div className="doc-top">
               <span className={`avatar big ${d.online ? "online" : ""}`}>{d.name.split(" ")[1]?.[0] ?? "D"}</span>

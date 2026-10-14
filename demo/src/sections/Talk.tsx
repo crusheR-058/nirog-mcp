@@ -1,12 +1,11 @@
 import { useEffect, useRef } from "react";
 import { ArrowCounterClockwise, Terminal } from "@phosphor-icons/react";
-import { PATIENTS } from "../clinic/data";
 import { TRIES } from "../copy";
 import { useDemo } from "../store";
 import type { useConversation } from "../voice/useConversation";
 
 export function Talk({ convo }: { convo: ReturnType<typeof useConversation> }) {
-  const { turns, traces, complete, reset } = useDemo();
+  const { turns, traces, complete, reset, patients } = useDemo();
   const { settings, setSettings, health, stop, handle, phase } = convo;
   const busy = phase === "thinking" || phase === "listening";
   const convoRef = useRef<HTMLDivElement>(null);
@@ -54,7 +53,7 @@ export function Talk({ convo }: { convo: ReturnType<typeof useConversation> }) {
               <label>Consent token<input value={settings.token} onChange={(e) => setSettings({ ...settings, token: e.target.value })} placeholder="empty for an open local server" /></label>
               <label>Patient
                 <select value={settings.patientId} onChange={(e) => setSettings({ ...settings, patientId: e.target.value })}>
-                  {PATIENTS.map((p) => (
+                  {patients.map((p) => (
                     <option key={p.id} value={p.id}>{p.id} · {p.fullName}{p.conditions.length ? ` · ${p.conditions[0]}` : ""}</option>
                   ))}
                 </select>

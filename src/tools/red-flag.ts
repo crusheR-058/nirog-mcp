@@ -42,7 +42,23 @@ export async function runRedFlag(
       actions.push({ type: "emergency_advice", detail: advice });
       parts.push(advice);
     }
-    consultId = await data.requestConsult({ patientId: patient.id, triage: level, reason: `${reason}: "${input.symptoms.trim()}"`, now });
+    // The doctor opens the consult with the patient's words and the rule that fired. Saving it must never block escalation.
+    const handoverId = await data
+      .saveHandover({
+        patientId: patient.id,
+        chiefComplaint: reason,
+        narrative: `Said: "${input.symptoms.trim()}". ${t.matched.length ? `Matched: ${t.matched.map((m) => m.label).join("; ")}.` : "Raised by the intake assistant; no rule matched."} Escalated by rules-based triage. Not a diagnosis.`,
+        symptoms: [],
+        redFlags: t.matched.map((m) => m.label),
+        triage: level,
+        language: lang === "hi" ? "Hindi" : "English",
+        now,
+      })
+      .catch((err: unknown) => {
+        console.error("[red-flag] handover not saved:", err instanceof Error ? err.message : String(err));
+        return undefined;
+      });
+    consultId = await data.requestConsult({ patientId: patient.id, triage: level, reason: `${reason}: "${input.symptoms.trim()}"`, now, handoverId });
     actions.push({ type: "consult_requested", detail: `${level} consult ${consultId} queued for the on-call doctor` });
     await audit(data, "Queued consult", patient.fullName, `${level} · ${t.matched[0]?.id ?? "raised by the intake assistant"} · rules-based triage`);
     const alerted = await data.alertCaregiver({ patientId: patient.id, level, message: `${patient.fullName}: ${reason}` });

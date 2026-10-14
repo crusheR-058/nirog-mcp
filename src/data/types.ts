@@ -1,4 +1,4 @@
-/** Shapes mirrored from the Nirog doctor portal schema (Prisma models Patient + Encounter). */
+/** Clinic data shapes. The Supabase schema is supabase/migrations/0001_clinic.sql. */
 
 export interface PatientRecord {
   id: string;
@@ -49,6 +49,58 @@ export interface ConsultRequest {
   triage: "emergency" | "urgent" | "routine";
   reason: string;
   now: Date;
+  /** The handover the doctor reads before this consult. */
+  handoverId?: string;
+}
+
+/** What the doctor reads before a consult. Every field is a quote or a rule's output; nothing is model-written. */
+export interface NewHandover {
+  patientId: string;
+  chiefComplaint: string;
+  narrative: string;
+  symptoms: string[];
+  redFlags: string[];
+  triage: "emergency" | "urgent" | "routine";
+  language: string;
+  now: Date;
+}
+
+/** A consultation the doctor files from the portal. It becomes the patient's care plan. */
+export interface NewEncounter {
+  patientId: string;
+  consultId: string | null;
+  /** Registration number of the signed-in doctor, or null in open development mode. */
+  doctorRegistrationNo: string | null;
+  chiefComplaint: string;
+  assessment: string;
+  clinicalNotes: string;
+  prescriptions: PrescribedItem[];
+  labRequests: LabRequest[];
+  followUp: FollowUp | null;
+  now: Date;
+}
+
+/** Everything the doctor portal shows, in the portal's own shapes (demo/src/clinic/data.ts). */
+export interface ClinicSnapshot {
+  patients: Array<{
+    id: string; fullName: string; sex: string; dateOfBirth: string; village: string; district: string; language: string;
+    abha: boolean; relationship: string; allergies: string[]; conditions: string[]; medications: string[]; consent: "active" | "pending";
+  }>;
+  doctors: Array<{ id: string; name: string; spec: string; exp: number; rating: number; fee: number; online: boolean; langs: string }>;
+  handovers: Array<{
+    id: string; patientId: string; createdAt: string; chiefComplaint: string; narrative: string; durationText: string;
+    symptoms: string[]; redFlags: string[]; vitals: Record<string, number>; aiConfidence: number | null;
+    suggestedTriage: "emergency" | "urgent" | "routine"; language: string;
+  }>;
+  queue: Array<{
+    id: string; patientId: string; kind: "new" | "follow_up" | "pediatrics" | "chronic" | "emergency"; triage: "emergency" | "urgent" | "routine";
+    state: "waiting" | "scheduled" | "in_consult" | "completed"; checkedInAt: string; scheduledFor: string; channel: "video" | "audio" | "chat";
+    reason: string; handoverId?: string; quality: "good" | "fair" | "poor"; redFlagCount: number; source: "app" | "alexa";
+  }>;
+  encounters: Array<{
+    id: string; patientId: string; startedAt: string; chiefComplaint: string; assessment: string; notes: string;
+    prescriptions: PrescribedItem[]; labs: LabRequest[]; followUp: FollowUp | null; doctor: string;
+  }>;
 }
 
 /** A consult waiting in the on-call pool, as the doctor portal reads it. */
@@ -96,4 +148,12 @@ export interface NirogData {
   /** Record that a dose was taken. Returns the record id. */
   logDose(d: { patientId: string; drug: string; slot: string; takenAt: Date }): Promise<string>;
   listDoses(patientId: string, since: Date): Promise<DoseRecord[]>;
+  /** Store a handover for the doctor. Returns its id. */
+  saveHandover(h: NewHandover): Promise<string>;
+  /** The whole clinic for the portal, or null when this source has none (the portal then shows its built-in demo). */
+  clinicSnapshot(): Promise<ClinicSnapshot | null>;
+  /** A doctor opens a consult. Returns false if there is no such consult. */
+  startConsult(consultId: string, doctorRegistrationNo: string | null): Promise<boolean>;
+  /** File a completed encounter and close its consult. Returns the encounter id. */
+  fileEncounter(e: NewEncounter): Promise<string>;
 }

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { AuditRecord, ConsultRecord, ConsultRequest, DoseRecord, EncounterRecord, NirogData, PatientRecord } from "./types.js";
+import type { AuditRecord, ConsultRecord, ConsultRequest, DoseRecord, EncounterRecord, NewEncounter, NewHandover, NirogData, PatientRecord } from "./types.js";
 
 /** Demo fixtures mirroring the Nirog doctor portal seed, so demos work with no database. */
 export const MOCK_PATIENTS: PatientRecord[] = [
@@ -62,6 +62,7 @@ export class MockData implements NirogData {
   alerts: Array<{ patientId: string; message: string }> = [];
   audit: AuditRecord[] = [];
   doses: DoseRecord[] = [];
+  handovers: Array<NewHandover & { id: string }> = [];
 
   constructor(
     private patients: PatientRecord[] = MOCK_PATIENTS,
@@ -117,5 +118,31 @@ export class MockData implements NirogData {
 
   async listDoses(patientId: string, since: Date) {
     return this.doses.filter((d) => d.patientId === patientId && new Date(d.takenAt) >= since);
+  }
+
+  async saveHandover(h: NewHandover) {
+    const id = `h_${randomUUID().slice(0, 8)}`;
+    this.handovers.push({ ...h, id });
+    return id;
+  }
+
+  /** The portal keeps its built-in demo clinic when the server has no database. */
+  async clinicSnapshot() {
+    return null;
+  }
+
+  async startConsult(consultId: string) {
+    return this.consults.some((c) => c.id === consultId);
+  }
+
+  async fileEncounter(e: NewEncounter) {
+    const id = `enc_${randomUUID().slice(0, 8)}`;
+    // A new array, not push: the default list is the shared MOCK_ENCOUNTERS constant.
+    this.encounters = [...this.encounters, {
+      id, patientId: e.patientId, startedAt: e.now.toISOString(), endedAt: e.now.toISOString(), chiefComplaint: e.chiefComplaint,
+      assessment: e.assessment, clinicalNotes: e.clinicalNotes, prescriptions: e.prescriptions, labRequests: e.labRequests, followUp: e.followUp,
+    }];
+    this.consults = this.consults.filter((c) => c.id !== e.consultId);
+    return id;
   }
 }

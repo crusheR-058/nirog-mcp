@@ -3,6 +3,7 @@ import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { mintDoctorSession, sessionSecret } from "../auth/doctor.js";
 import { getDataSource } from "../data/index.js";
+import { runDose } from "../tools/dose.js";
 import { runRedFlag } from "../tools/red-flag.js";
 import { clinicRoutes } from "./routes.js";
 
@@ -54,6 +55,21 @@ describe("/api/clinic", () => {
     } finally {
       delete process.env.NIROG_TOKEN_SECRET;
     }
+  });
+
+  it("files a consultation that becomes the patient's care plan, which Alexa+ then reads", async () => {
+    const post = (body: unknown) => fetch(`${base}/encounters`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const bad = await post({ patientId: "pat_meena", assessment: "  " });
+    expect(bad.status).toBe(400);
+    expect(((await bad.json()) as { error: string }).error).toContain("assessment");
+
+    const r = await post({ patientId: "pat_meena", assessment: "Tension-type headache.", prescriptions: [{ drug: "Paracetamol", strength: "500mg", frequency: "Twice daily", durationDays: 5 }], ariaAccepted: true });
+    expect(r.status).toBe(200);
+    // Meena had no plan. The dose tool now finds the medicine the doctor just prescribed.
+    const dose = await runDose(getDataSource(), { patientId: "pat_meena", now: new Date() });
+    expect(dose).toMatchObject({ logged: true, drug: "Paracetamol" });
+    const live = (await (await fetch(`${base}/live`)).json()) as { audit: Array<{ action: string; reason?: string }> };
+    expect(live.audit.find((a) => a.action === "Filed encounter")?.reason).toBe("1 prescription · ARIA handover accepted");
   });
 
   it("rejects an audit line with no action", async () => {

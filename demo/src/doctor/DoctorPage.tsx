@@ -171,7 +171,7 @@ export function DoctorPage({ onBack }: { onBack: () => void }) {
                   <p className="small">Set <code>GOOGLE_CLIENT_ID</code> on the server to a Web OAuth client from Google Cloud Console, with this origin under Authorized JavaScript origins.</p>
                   {config?.demoSignIn && (
                     <form className="demo-form" onSubmit={(e) => { e.preventDefault(); void afterGoogle({ demo: { email: demoEmail, name: "Dr. Ananya Rao" }, email: demoEmail, name: "Dr. Ananya Rao" }); }}>
-                      <label>Demo Google account (open dev server only)<input value={demoEmail} onChange={(e) => setDemoEmail(e.target.value)} type="email" required /></label>
+                      <label>Demo account (fictional clinic, no Google needed)<input value={demoEmail} onChange={(e) => setDemoEmail(e.target.value)} type="email" required /></label>
                       <button className="btn primary" type="submit" disabled={busy}><GoogleLogo size={16} weight="bold" /> Continue as demo account</button>
                     </form>
                   )}

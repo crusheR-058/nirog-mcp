@@ -170,6 +170,10 @@ export const T = {
     lang === "hi"
       ? `${drug} की आज की खुराक पहले ही दर्ज है। कृपया दोबारा मत लीजिए। अगर शक हो तो मैं डॉक्टर से पूछ सकती हूँ।`
       : `${drug} is already recorded for today. Please do not take an extra dose. If you are unsure, I can ask the doctor.`,
+  doseDuplicateSlot: (lang: Lang, drug: string, slot: string) =>
+    lang === "hi"
+      ? `${drug} की ${slotName(slot, "hi")} की खुराक पहले ही दर्ज है। कृपया अभी दोबारा मत लीजिए। अगर शक हो तो मैं डॉक्टर से पूछ सकती हूँ।`
+      : `The ${slot} dose of ${drug} is already recorded. Please do not take another one now. If you are unsure, I can ask the doctor.`,
 
   /* family summary */
   summary: (lang: Lang, p: { name: string; days: number; complaints: number; flag: { region: Region; visits: number; span: number } | null; taken: number; expected: number; consults: number }) => {

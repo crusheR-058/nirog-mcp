@@ -51,6 +51,16 @@ describe("log_dose_taken", () => {
     expect(await runDose(data, { patientId: "pat_sunita", now: NIGHT })).toMatchObject({ logged: false, reason: "already_taken" });
   });
 
+  it("refuses a second dose in the same part of the day even when another slot is still open", async () => {
+    const data = new MockData();
+    expect(await runDose(data, { patientId: "pat_sunita", now: NIGHT })).toMatchObject({ logged: true, slot: "night", remainingToday: ["morning"] });
+    const again = await runDose(data, { patientId: "pat_sunita", now: NIGHT });
+    if ("error" in again) throw new Error(again.error);
+    expect(again).toMatchObject({ logged: false, reason: "already_taken", slot: "night", remainingToday: ["morning"] });
+    expect(again.spoken).toContain("night dose of Metformin 500mg is already recorded");
+    expect(data.doses).toHaveLength(1);
+  });
+
   it("asks which medicine when there are several, and matches a named one", async () => {
     const data = new MockData();
     const ask = await runDose(data, { patientId: "pat_lakshmi", now: AFTERNOON });

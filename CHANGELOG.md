@@ -119,3 +119,20 @@ hackathon; this MCP server and Agent Skill are new.
 - `pnpm verify` now also checks the clinic data, that the public key is blocked, and that the trust log refuses
   edits. Every tool was run over HTTP against the live database with Bedrock: intake recall (0.642 with Titan),
   care plan in English and Hindi, dose logging, red flag with consult and family contact, family summary.
+- The care loop closes in the database. A finished `start_intake` saves a handover built from the patient's words
+  and the rules, and queues the visit with it (urgent when the complaint recurs, and the handover says why).
+  `report_red_flag` attaches a rules-only handover to every escalation; a failed save never blocks the escalation.
+- Doctor portal on live data: patients, doctors, handovers, the queue and encounters come from `/api/clinic/live`.
+  Starting a consult and filing an encounter write through (`POST /api/clinic/consults/:id/start`,
+  `POST /api/clinic/encounters`, validated with zod). The filed encounter is the plan `get_care_plan` and
+  `log_dose_taken` read next. Without a database the portal keeps its built-in clinic.
+- Found in an end-to-end browser run: filing Ibuprofen for back pain dropped Rahul's Amlodipine from his plan, because
+  the newest encounter is the plan. Medicines still running are now carried forward onto the consult form, with
+  their remaining days, and the doctor removes what they stop.
+- `log_dose_taken` refuses a second dose in the same part of the day. Before, "I took my Metformin" said twice at
+  night recorded the second as the morning dose.
+- Public demo mode (`PUBLIC_DEMO=1`) for the deployment: `/auth/demo` issues a signed 6-hour consent token for the
+  fictional household and a one-day demo doctor session; `/mcp` is rate-limited per address behind App Runner's proxy.
+- `pnpm db:reset -- --yes` clears what demo runs created and reseeds, for a clean recording.
+- 79 tests. Verified in headless Chromium against Supabase and Bedrock: voice intake to handover to queue, the doctor
+  files a prescription, Alexa+ reads back both the new and the carried-forward medicine.

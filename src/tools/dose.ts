@@ -80,6 +80,13 @@ export async function runDose(data: NirogData, input: { patientId: string; medic
     return { patient: who, logged: false, reason: "already_taken", drug: med.drug, slot: null, today: { expected: slots.length, taken: slots.length }, remainingToday: [], spoken: T.doseDuplicate(lang, label) };
   }
 
+  // A second dose in the same part of the day is a double dose even when a later slot is still open:
+  // "I took my Metformin" twice at night must not record the second one as the morning dose.
+  if (slots.includes(clock.period) && takenToday.includes(clock.period)) {
+    await audit(data, "Refused duplicate dose", patient.fullName, `${label} · ${clock.period} dose already recorded`);
+    return { patient: who, logged: false, reason: "already_taken", drug: med.drug, slot: clock.period, today: { expected: slots.length, taken: slots.length - remaining.length }, remainingToday: remaining, spoken: T.doseDuplicateSlot(lang, label, clock.period) };
+  }
+
   const slot = remaining.includes(clock.period) ? clock.period : remaining[0];
   await data.logDose({ patientId: patient.id, drug: med.drug, slot, takenAt: now });
   await audit(data, "Logged dose", patient.fullName, `${label} · ${slot}`);
