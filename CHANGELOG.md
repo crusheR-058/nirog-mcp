@@ -174,3 +174,16 @@ hackathon; this MCP server and Agent Skill are new.
 - `pnpm demo:record` records the demo video from the live page: captured frames, the assistant's lines in Polly's
   voice at the moments they played, and narrated title and closing cards.
 - 94 tests.
+- A second code review, of the agent, the voice and the story, found and we fixed:
+  - **An emergency spread over two turns was never escalated.** "My chest hurts", then "yes, I'm sweating" matched
+    no rule, because each sentence was triaged alone. The rules now read the whole intake, in the agent's guard and
+    in start_intake, and an emergency skips the model entirely.
+  - The chest-pain rule missed filler words ("सीने में बहुत दर्द", "chest is very tight", "pressure on my chest");
+    "arm" matched inside "pharmacy".
+  - A made-up tool name let the model's own words through; consent was checked after patient data had been read;
+    a failed escalation could leave the patient without the 108 line; raw AWS and database errors could reach the
+    client or be spoken.
+  - The demo reset needed no token; `/api/speak` was a cheap Polly proxy. Now: the reset needs the demo token and runs
+    one at a time, every route has its own rate limit keyed by IPv4 or IPv6 /64, and Polly has a daily budget.
+  - Stop and race bugs in the voice and the story.
+- 97 tests; agent evaluation 26/26.

@@ -112,7 +112,7 @@ so a consult raised by voice in one room appears on the doctor's screen in anoth
   speech in and out that is a real MCP client of the real server, beside a trace of every tool call, and the
   doctor's portal on the same record. On the deployment, a visitor gets a short-lived consent token for the
   fictional demo household, so judges can use it with no Alexa+ account and no clinic login.
-- **94 automated tests,** all offline, covering the rules, the Hindi handling, the double-dose guards, consent,
+- **97 automated tests,** all offline, covering the rules, the Hindi handling, the double-dose guards, consent,
   the handovers, and the clinic API; plus an end-to-end run in a headless browser against Supabase and Bedrock.
 
 ## What was built during the hackathon, and what was not

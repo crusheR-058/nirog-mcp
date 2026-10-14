@@ -3,3 +3,5 @@ dist
 .env
 .env.*
 !.env.example
+# The demo video is uploaded to YouTube, not committed
+SUBMISSION/*.mp4
