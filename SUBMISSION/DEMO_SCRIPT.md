@@ -1,5 +1,10 @@
 # Demo video script
 
+**The quickest way:** `pnpm demo:record` in `nirog-mcp` records the video from the live page by itself. Headless
+Chrome plays "the story", the frames are captured, every line the assistant speaks is laid back under them in
+Polly's voice, and a title card and a closing card frame it. It writes `SUBMISSION/nirog-demo.mp4`, under three
+minutes. Watch it before uploading. The script below is for recording it yourself, with your own voice.
+
 Under 3 minutes. Public on YouTube, in English. The rules ask that it show the project working.
 
 The story is one evening for one patient, told from both chairs: Rahul tells Alexa+ his back pain is back, the

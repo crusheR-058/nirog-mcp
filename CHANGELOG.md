@@ -156,3 +156,21 @@ hackathon; this MCP server and Agent Skill are new.
     The trust log names the patient from the record, not from the request.
   - The public-demo token covers only the six fictional patients; `PUBLIC_DEMO=1` without a secret refuses to start.
 - 84 tests.
+
+## 2026-10-15
+- A real Alexa+ agent for the web page (`src/agent/alexa.ts`, `POST /api/agent`). Amazon Nova Lite on Bedrock reads
+  the MCP tool descriptions through an in-process MCP client and routes the patient's words; its instructions are
+  the Agent Skill. The patient hears the tools' spoken lines, never the model's prose; start_intake gets the exact
+  words; a guard escalates whatever the triage rules flag. A model chain and a pattern router cover throttling and
+  a model that tries to answer more than small talk itself (found on a test run: it told a patient not to take
+  another dose without calling the dose tool). `pnpm agent:eval`: 26/26, 833 ms median.
+- Amazon Polly (`POST /api/speak`, neural voice Kajal) is the assistant's voice, in Indian English and Hindi, with
+  the browser's voice as fallback. The instance role may now call Polly.
+- Writing the guard tests found that "my chest hurts" and "pain in my chest" did not trip the chest-pain emergency
+  rule, which only knew "chest pain". It now hears the ways people say it, in English and Hindi.
+- "Play the 3-minute story" plays one evening from both chairs on the live page, with captions, and
+  `POST /auth/demo/reset` (public demo only, once a minute) puts the shared clinic back first.
+- MCP tools carry annotations (read-only, idempotent) and return structured content.
+- `pnpm demo:record` records the demo video from the live page: captured frames, the assistant's lines in Polly's
+  voice at the moments they played, and narrated title and closing cards.
+- 94 tests.

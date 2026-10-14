@@ -11,11 +11,14 @@ The loop closes. The handover lands in the doctor's queue; the doctor files a pr
 evening Alexa+ reads the new plan back and logs each dose, refusing a double one.
 
 It is a self-hosted **MCP server** (Streamable HTTP) plus an **Agent Skill**, built for the Alexa+ track of the
-Build, Ship, Shape: Amazon Developer Hackathon. It also ships a web page that simulates the Alexa+ experience
-against the real server, and the doctor's side of the same consultation.
+Build, Ship, Shape: Amazon Developer Hackathon. It also ships a web page that simulates the Alexa+ device against
+the real server, with a real agent (Amazon Nova on Bedrock) choosing the tools and Amazon Polly speaking, and the
+doctor's side of the same consultation.
+
+**Live:** https://j2fkpyar4b.ap-south-1.awsapprunner.com/demo/ — press **Play the 3-minute story** (sound on).
 
 ```
-Alexa+ ──MCP / Streamable HTTP──▶ nirog-mcp ──▶ clinical memory (in-process | Postgres + pgvector)
+Alexa+ (or the page's agent: Nova on Bedrock) ──MCP──▶ nirog-mcp ──▶ clinical memory (in-process | Postgres + pgvector)
                                       │      ──▶ Amazon Bedrock (GPT-OSS 120B for questions, Titan Embed v2 for recall)
                                       │      ──▶ clinic record (built-in demo set | Supabase, RLS on, append-only trust log)
 Doctor portal ──/api/clinic──────────┘          one trust log, written by every tool call
@@ -39,7 +42,7 @@ demo history, an offline embedder, and ARIA's questions from Amazon Bedrock if y
 (set `ARIA_MODEL=off` to use the built-in fallback questions instead).
 
 ```bash
-pnpm test           # 84 tests, offline, a few seconds
+pnpm test           # 94 tests, offline, a few seconds
 pnpm typecheck
 ```
 
@@ -73,6 +76,7 @@ The split between code and model is the design, so it is worth stating exactly.
 | Whether a pattern is worth a doctor's attention | Arithmetic: 3 visits, one region, 90 days | A doctor can check it on paper in ten seconds. |
 | Whether this is an emergency | 15 table-driven rules, negation-aware, condition-aware, in English and Hindi | Wheezing is an emergency for a patient with asthma and routine for anyone else. A model may raise a level, never lower one. |
 | Which earlier complaints mean the same thing | Embeddings (Titan Embed v2, or an offline lexical embedder) | This is the one job that needs meaning rather than words. |
+| Which tool the patient's words need | Amazon Nova Lite on Bedrock, reading the MCP tool descriptions (the page's simulated Alexa+) | That is Alexa+'s job. Code still passes the exact words, fixes the patient, speaks the tools' own lines, and escalates whatever the rules flag even if the model chose otherwise. `pnpm agent:eval`: 26/26. |
 | What to ask next | GPT-OSS 120B on Amazon Bedrock, through a forced tool call | It conducts the conversation. It never writes the chart. Code holds it to at least two questions. |
 | What the doctor reads | Code: the patient's verbatim words, the region, the pattern, the triage level | An early version let the model write this, and it invented a symptom. Now nothing reaches the doctor that the patient did not say or a rule did not find. |
 
@@ -94,6 +98,8 @@ Copy `.env.example` to `.env`. Everything is optional.
 | `GOOGLE_CLIENT_ID` | unset | Enables Google sign-in on the doctor page. |
 | `CLINIC_INVITE_CODE`, `DOCTOR_ALLOWLIST` | demo values | One-time doctor verification. |
 | `CLINIC_UTC_OFFSET_MINUTES` | `330` (IST) | The clock doses are counted on. |
+| `BEDROCK_AGENT_MODELS` | Nova Lite APAC, Nova 2 Lite, Nova Pro APAC | The agent's model chain, tried in order when one is throttled (`BEDROCK_AGENT_MODEL` pins one). |
+| `POLLY_VOICE` | `Kajal` | The assistant's Polly voice (neural; Kajal speaks Indian English and Hindi). |
 | `PUBLIC_DEMO` | unset | `1` on the hackathon deployment only: visitors get a 6-hour consent token for the fictional demo household and a demo doctor session, and `/mcp` is rate-limited per address. Never with real patients. |
 
 For Supabase: `pnpm db:migrate` creates the memory and clinic tables, seeds the demo clinic and history, and
@@ -119,8 +125,11 @@ an allowlist. The server issues a signed 30-day session, so later visits need on
 
 `demo/` is a Vite + React page: glass panels over a Three.js particle sphere that reacts to the conversation.
 
-- **Voice bar.** Follows the page. Microphone, typed input, suggestion chips, EN/हिं toggle. Every reply is a tool
-  result from this server; the browser only does speech in and out.
+- **The story.** "Play the 3-minute story" resets the shared demo clinic and plays one evening from both chairs on
+  the live page, with captions: it types into the real voice bar and presses the doctor's real buttons.
+- **Voice bar.** Follows the page. Microphone, typed input, suggestion chips, EN/हिं toggle. Each turn goes to
+  `/api/agent`, where Amazon Nova picks the MCP tools; the reply is the tools' own spoken lines, in Polly's voice.
+  The trace shows which model (or the patterns, or the guard) chose each tool.
 - **Memory.** A node graph of one patient's complaints, joined by the real cosine distances.
 - **Case file.** The recurrence verdict, the SBAR handover the doctor reads, a timeline in the patient's words.
 - **Doctor portal.** Queue sorted by triage, patients, chart, a consultation form that files an encounter, the
@@ -132,6 +141,8 @@ an allowlist. The server issues a signed 30-day session, so later visits need on
 
 ```bash
 pnpm dev:demo       # Vite on :5173 with hot reload, proxying to the server on :3333
+pnpm agent:eval     # how well the agent routes 26 labelled utterances (calls Bedrock)
+pnpm demo:record    # records the demo video from the live page: frames, Polly audio, title cards (needs ffmpeg)
 ```
 
 ## Deploy
@@ -150,6 +161,9 @@ The second script refuses to deploy without `NIROG_TOKEN_SECRET`. It forwards th
 
 Stated plainly, because a clinical tool that overstates itself is worse than one that does less.
 
+- **The agent's evaluation is small.** 26 labelled utterances; a real Alexa+ deployment would need a far larger
+  set, in more languages. A new AWS account's Bedrock quota is low; throttled turns fall back to other models, then
+  to patterns, and the page says so.
 - **Not tested against a real Alexa+ device.** No Alexa+ sandbox was available. The server follows the MCP
   Streamable HTTP spec and is exercised by the MCP SDK client and MCP Inspector.
 - **The triage rules are not clinically validated.** They are a demonstration of the mechanism: a table a

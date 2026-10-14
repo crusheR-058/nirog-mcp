@@ -76,6 +76,16 @@ whether a pattern is forming, how many doses were taken. It gives counts, never 
 and romanised Hindi, including the fact that Hindi negates after the noun ("दर्द नहीं है") where English negates
 before it.
 
+**A real agent plays Alexa.** On the web page, Amazon Nova on Bedrock reads the MCP tool descriptions and decides
+which tool the patient's words need, as Alexa+ would; its instructions are the project's Agent Skill. It routed 26
+of 26 labelled utterances in English, Hindi and romanised Hindi. Code keeps what matters: the patient hears the
+tools' reviewed lines, never the model's, and anything the rules flag is escalated even if the model chose
+otherwise. The assistant speaks with Amazon Polly's neural voice Kajal, in Indian English and Hindi.
+
+**A judge can see it all in three minutes.** "Play the 3-minute story" on the live page resets the shared demo
+clinic and plays one evening from both chairs, with captions, typing into the real voice bar and pressing the
+doctor's real buttons.
+
 **It shows its work.** Every tool call is written to a trust log: who, what, and why. The database itself refuses
 to edit or delete a line of it. The doctor's portal reads the log, the queue and the chart from the same server,
 so a consult raised by voice in one room appears on the doctor's screen in another.
@@ -102,7 +112,7 @@ so a consult raised by voice in one room appears on the doctor's screen in anoth
   speech in and out that is a real MCP client of the real server, beside a trace of every tool call, and the
   doctor's portal on the same record. On the deployment, a visitor gets a short-lived consent token for the
   fictional demo household, so judges can use it with no Alexa+ account and no clinic login.
-- **84 automated tests,** all offline, covering the rules, the Hindi handling, the double-dose guards, consent,
+- **94 automated tests,** all offline, covering the rules, the Hindi handling, the double-dose guards, consent,
   the handovers, and the clinic API; plus an end-to-end run in a headless browser against Supabase and Bedrock.
 
 ## What was built during the hackathon, and what was not
@@ -185,14 +195,15 @@ CHANGELOG.md records it day by day.
 ## Built with
 
 `typescript` `node.js` `model-context-protocol` `alexa` `amazon-bedrock` `amazon-ecr` `aws-app-runner`
-`postgresql` `pgvector` `supabase` `react` `three.js` `vite` `vitest` `playwright`
+`amazon-nova` `amazon-polly` `postgresql` `pgvector` `supabase` `react` `three.js` `vite` `vitest` `playwright`
 
 ## Try it
 
 - **Repository:** https://github.com/crusheR-058/nirog-mcp
 - **Video:** TODO-VIDEO
-- **Live:** https://j2fkpyar4b.ap-south-1.awsapprunner.com/demo/ (simulated Alexa+ and the doctor portal on one
-  live record; no account needed. The MCP endpoint is `/mcp` and needs a consent token.)
+- **Live:** https://j2fkpyar4b.ap-south-1.awsapprunner.com/demo/ — press **Play the 3-minute story**, sound on.
+  Simulated Alexa+ and the doctor portal on one live record; no account needed. The MCP endpoint is `/mcp` and
+  needs a consent token.
 - **Locally, in three commands:**
 
   ```bash

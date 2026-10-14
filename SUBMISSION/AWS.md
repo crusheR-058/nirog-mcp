@@ -6,13 +6,58 @@ For the AWS Builder mini challenge. What we use, where it is in the code, and wh
 
 | Service | What it does here | Where |
 |---|---|---|
+| **Amazon Bedrock**, Amazon Nova Lite (APAC) | The Alexa+ agent: reads the MCP tool descriptions and routes the patient's words to a tool | [`src/agent/alexa.ts`](../src/agent/alexa.ts), [`scripts/agent-eval.ts`](../scripts/agent-eval.ts) |
 | **Amazon Bedrock**, GPT-OSS 120B | ARIA's intake conversation: the next question, in English or Hindi, returned through a forced tool call | [`src/ai/converse.ts`](../src/ai/converse.ts), [`src/ai/aria.ts`](../src/ai/aria.ts) |
 | **Amazon Bedrock**, Titan Text Embeddings V2 | Clinical memory: finding earlier complaints that meant the same thing in different words | [`src/memory/embed.ts`](../src/memory/embed.ts), [`src/memory/recall.ts`](../src/memory/recall.ts) |
+| **Amazon Polly**, neural voice Kajal | The assistant's voice, Indian English and Hindi from one voice | [`src/agent/routes.ts`](../src/agent/routes.ts), [`demo/src/speech.ts`](../demo/src/speech.ts) |
 | **Amazon ECR** | Holds the server image | [`Dockerfile`](../Dockerfile), [`deploy/apprunner.sh`](../deploy/apprunner.sh) |
-| **AWS App Runner** | Runs the MCP server behind HTTPS | [`deploy/apprunner.sh`](../deploy/apprunner.sh) |
-| **AWS IAM** | A task role that may invoke Bedrock and nothing else | [`deploy/iam.sh`](../deploy/iam.sh) |
+| **AWS App Runner** | Runs the MCP server, the agent and the web page behind HTTPS, live at https://j2fkpyar4b.ap-south-1.awsapprunner.com | [`deploy/apprunner.sh`](../deploy/apprunner.sh) |
+| **AWS IAM** | A task role that may invoke Bedrock and Polly and nothing else | [`deploy/iam.sh`](../deploy/iam.sh) |
 
 Everything runs in **`ap-south-1` (Mumbai)**. The patients are in Uttar Pradesh; the model should be too.
+
+## Amazon Bedrock: the Alexa+ agent (Amazon Nova)
+
+The page is a simulated Alexa+ device, so something has to play Alexa: read what the patient said and decide which
+tool it needs. That is a real agent, not a set of patterns. It runs on the server as an MCP client of the same
+server (in process), so it sees exactly the tool list and descriptions any Alexa+ agent would see, and its
+instructions are the Agent Skill, [`skills/nirog/SKILL.md`](../skills/nirog/SKILL.md).
+
+- **Model:** `apac.amazon.nova-lite-v1:0` through the Converse API with tool use and `toolChoice: auto`.
+  Alexa+ itself runs on Amazon Nova, and the APAC inference profile keeps requests in the region.
+- **One model call per turn.** The model only routes. What the patient hears is assembled from the tools' own
+  `spoken` lines, so the clinical wording stays in one reviewed place and a voice turn needs no second round trip.
+- **What code keeps from the model:** `start_intake` always gets the patient's exact words and this intake's
+  transcript, never the model's paraphrase; every tool call is made for the session's patient, whatever id the
+  model wrote; and a **guard** escalates through `report_red_flag` whenever the triage rules flag the words, even
+  if the model chose another tool or none.
+- **The model may speak its own words only for small talk.** On a test run it answered a second "I took my
+  Ibuprofen" with "you have already taken it today, do not take another dose", correctly, but from memory, with
+  no tool and no trust-log line. Now, when the model picks no tool for anything but a greeting, a pattern router
+  sends the turn to the right tool.
+- **Throttling is expected on a new account.** The client uses adaptive retries; a busy model passes the turn to
+  the next one in a chain (Nova Lite APAC, then Nova 2 Lite, then Nova Pro APAC), each with its own quota; and if
+  none answers, the pattern router routes the turn. The trace on the page says which one decided.
+
+**Measured, 14 October 2026** with `pnpm agent:eval`: 26 labelled utterances in English, Hindi and romanised
+Hindi (symptoms, emergencies, doses, care-plan and family questions, an intake follow-up, small talk), paced like
+conversation turns.
+
+| Model | Routed by the model | Right after the guard | Routing latency (median / max) |
+|---|---|---|---|
+| Amazon Nova Lite (APAC) | 26 / 26 | 26 / 26 | 833 ms / 1,594 ms |
+
+An earlier 20-case run gave Nova Pro (APAC) and Nova 2 Lite 20 / 20 as well, at 1,230 ms and 1,086 ms median;
+Nova Lite was the quickest. Fired back to back with no pause, the same set hit the account's request quota; that
+is what the model chain and the pattern router are for.
+
+## Amazon Polly: the voice
+
+`POST /api/speak` returns `audio/mpeg` from Polly's neural voice **Kajal**, which speaks Indian English and Hindi,
+so a conversation that switches language keeps one voice. Before this the page used the browser's speech engine,
+and many computers have no Hindi voice at all. Recent lines are cached in the process, so a repeated prompt costs
+nothing twice; if Polly cannot be reached the page falls back to the browser's voice. Like `/mcp`, the endpoint
+needs the household consent token, and on the public demo it is rate-limited per address.
 
 ## Amazon Bedrock: the conversation
 
@@ -106,17 +151,20 @@ bash deploy/apprunner.sh   # build, push to ECR, create or update the service, w
 
 - **Stateless Streamable HTTP** means App Runner can add instances with no session affinity.
 - **Least privilege:** the instance role's only policy allows `bedrock:InvokeModel`, `bedrock:Converse` and their
-  streaming forms. It cannot read S3, cannot touch IAM, cannot do anything else.
+  streaming forms, and `polly:SynthesizeSpeech`. It cannot read S3, cannot touch IAM, cannot do anything else.
 - **Refuses to deploy open:** the script exits unless `NIROG_TOKEN_SECRET` is set, so a deployed server always
   requires consent tokens.
 - **Health check** on `/health`, which also reports whether auth is on.
 
-**Status, honestly:** the image is built and pushed to ECR in `ap-south-1`. The App Runner service has not been
-created yet, because creating its two IAM roles needs an account administrator. The scripts are written and
-reviewed but `apprunner.sh` has not been run end to end.
+**Status:** live since 14 October 2026 at https://j2fkpyar4b.ap-south-1.awsapprunner.com, 0.25 vCPU and 0.5 GB,
+with the clinic record on Supabase and `PUBLIC_DEMO=1`, so a visitor with no Alexa+ account gets a six-hour consent
+token for the fictional demo household. Behind App Runner's proxy the server trusts one hop, so the per-address rate
+limit on `/mcp`, `/api/agent` and `/api/speak` sees real client addresses. `deploy/iam.sh` needed one fix to run
+under Git Bash on Windows (the AWS CLI could not open `/tmp` paths); it is in the friction log.
 
 ## What we would add next
 
-- **Amazon Polly** (neural, `Kajal`) for ARIA's voice in the web page, in place of the browser's speech engine.
 - **Amazon SNS** to deliver the family alert by SMS; today it is recorded in the trust log but not sent.
 - **Amazon Bedrock Guardrails** as a second, independent check that no reply names a diagnosis.
+- **Amazon Bedrock AgentCore** to host the agent, with the MCP server behind AgentCore Gateway.
+- **Amazon Transcribe** streaming for speech in, so recognition does not depend on the browser.

@@ -68,12 +68,13 @@ let ticket = 0;
 let rate = 1;
 export const setSpeechRate = (r: number) => { rate = r; };
 let playing: HTMLAudioElement | null = null;
-let pollyDown = false;
+let pollyDownUntil = 0;
+const announce = (text: string, language: Language) => window.dispatchEvent(new CustomEvent("nirog:speak", { detail: { text, language, rate, at: Date.now() } }));
 
 export function speak(text: string, onEnd?: () => void, language: Language = "en") {
   stopSpeaking();
   const mine = ticket;
-  if (pollyDown || text.length > 600) return browserSpeak(text, onEnd, language);
+  if (Date.now() < pollyDownUntil || text.length > 600) return browserSpeak(text, onEnd, language);
   void (async () => {
     let url = "";
     try {
@@ -81,7 +82,7 @@ export function speak(text: string, onEnd?: () => void, language: Language = "en
       if (!r.ok) throw new Error(`speak ${r.status}`);
       url = URL.createObjectURL(await r.blob());
     } catch {
-      pollyDown = true; // stay on the browser voice for this page rather than paying a failed request per line
+      pollyDownUntil = Date.now() + 30_000; // use the browser's voice for a while rather than paying a failed request per line
       if (mine === ticket) browserSpeak(text, onEnd, language);
       return;
     }
@@ -106,6 +107,8 @@ export function speak(text: string, onEnd?: () => void, language: Language = "en
       clearTimeout(guard);
       guard = setTimeout(finish, (audio.duration / rate) * 1000 + 1200);
     };
+    // The demo recorder lays the same audio under the captured frames at this moment.
+    audio.onplaying = () => announce(text, language);
     audio.onended = finish;
     audio.onerror = finish;
     // Autoplay can be refused (no gesture yet, headless): fall back to the browser voice for this line only.
@@ -138,6 +141,7 @@ function browserSpeak(text: string, onEnd?: () => void, language: Language = "en
   u.rate = 0.98 * rate;
   u.onend = finish;
   u.onerror = finish;
+  announce(text, language);
   speechSynthesis.speak(u);
 }
 
