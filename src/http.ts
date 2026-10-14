@@ -10,6 +10,7 @@ import { consentVerifier } from "./auth/tokens.js";
 import { scopeFromAuth } from "./auth/consent.js";
 import { authRoutes } from "./auth/routes.js";
 import { clinicRoutes } from "./clinic/routes.js";
+import { agentRoutes } from "./agent/routes.js";
 
 const PORT = Number(process.env.PORT ?? 3333);
 const HOST = process.env.HOST ?? "127.0.0.1";
@@ -56,7 +57,7 @@ if (process.env.PUBLIC_DEMO === "1") {
   app.set("trust proxy", 1);
   // Each tool call is three or four HTTP requests (initialize, initialized, call), so 300 is roughly 80 tool calls.
   const LIMIT = 300, WINDOW_MS = 10 * 60_000;
-  app.use(["/mcp", "/auth/demo"], (req, res, next) => {
+  app.use(["/mcp", "/auth/demo", "/api/agent", "/api/speak"], (req, res, next) => {
     const key = req.ip ?? "unknown";
     const now = Date.now();
     const h = hits.get(key);
@@ -72,6 +73,9 @@ if (process.env.PUBLIC_DEMO === "1") {
 
 // Doctor sign-in for the portal page: Google, then one-time verification.
 app.use("/auth", authRoutes());
+
+// The simulated Alexa+ device: an agent that routes the patient's words to the MCP tools, and its voice.
+app.use("/api", agentRoutes(TOKEN_SECRET));
 
 // What the doctor portal reads: consults queued and audit lines written through the MCP tools.
 app.use("/api/clinic", clinicRoutes());

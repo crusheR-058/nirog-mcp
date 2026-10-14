@@ -12,6 +12,7 @@
     "db:migrate": "tsx --env-file-if-exists=.env scripts/migrate.ts",
     "db:reset": "tsx --env-file-if-exists=.env scripts/migrate.ts --reset",
     "verify": "tsx --env-file-if-exists=.env scripts/verify.ts",
+    "agent:eval": "tsx scripts/agent-eval.ts",
     "consent-token": "tsx --env-file-if-exists=.env scripts/token.ts",
     "dev:demo": "vite demo",
     "build:demo": "vite build demo",
@@ -30,6 +31,7 @@
   "type": "module",
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.1146.0",
+    "@aws-sdk/client-polly": "^3.1150.0",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "@supabase/supabase-js": "^2.117.2",
     "express": "^5.2.1",

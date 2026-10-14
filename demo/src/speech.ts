@@ -1,6 +1,7 @@
 /* Browser speech: recognition for the patient, synthesis for the assistant. English (India) and Hindi. */
 
 import type { Language } from "./copy";
+import { consentHeader } from "./mcp";
 
 /* The Web Speech recognition API has no lib.dom typings; this is the slice we use. */
 interface RecognitionResultEvent { results: ArrayLike<ArrayLike<{ transcript: string }>> }
@@ -60,7 +61,55 @@ function pickVoice(language: Language): SpeechSynthesisVoice | undefined {
 }
 if ("speechSynthesis" in window) speechSynthesis.onvoiceschanged = () => undefined; // prompts some browsers to load the list
 
+/* The assistant's voice is Amazon Polly (Kajal, neural, Indian English and Hindi) from the server; the browser's own
+   voice is the fallback, so a machine without a Hindi voice still hears Hindi. */
+let ticket = 0;
+let playing: HTMLAudioElement | null = null;
+let pollyDown = false;
+
 export function speak(text: string, onEnd?: () => void, language: Language = "en") {
+  stopSpeaking();
+  const mine = ticket;
+  if (pollyDown || text.length > 600) return browserSpeak(text, onEnd, language);
+  void (async () => {
+    let url = "";
+    try {
+      const r = await fetch(`${location.origin}/api/speak`, { method: "POST", headers: { "content-type": "application/json", ...(await consentHeader()) }, body: JSON.stringify({ text, language }) });
+      if (!r.ok) throw new Error(`speak ${r.status}`);
+      url = URL.createObjectURL(await r.blob());
+    } catch {
+      pollyDown = true; // stay on the browser voice for this page rather than paying a failed request per line
+      if (mine === ticket) browserSpeak(text, onEnd, language);
+      return;
+    }
+    // Stopped while the audio was on its way: never start a line the patient already interrupted.
+    if (mine !== ticket) return URL.revokeObjectURL(url);
+    const audio = new Audio(url);
+    playing = audio;
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(guard);
+      URL.revokeObjectURL(url);
+      if (playing === audio) playing = null;
+      onEnd?.();
+    };
+    const guard = setTimeout(finish, Math.max(4000, text.split(/\s+/).length * 600));
+    audio.onended = finish;
+    audio.onerror = finish;
+    // Autoplay can be refused (no gesture yet, headless): fall back to the browser voice for this line only.
+    audio.play().catch(() => {
+      if (done) return;
+      done = true;
+      clearTimeout(guard);
+      URL.revokeObjectURL(url);
+      browserSpeak(text, onEnd, language);
+    });
+  })();
+}
+
+function browserSpeak(text: string, onEnd?: () => void, language: Language = "en") {
   if (!("speechSynthesis" in window)) return onEnd?.();
   speechSynthesis.cancel();
   let done = false;
@@ -83,5 +132,8 @@ export function speak(text: string, onEnd?: () => void, language: Language = "en
 }
 
 export function stopSpeaking() {
+  ticket++;
+  playing?.pause();
+  playing = null;
   if ("speechSynthesis" in window) speechSynthesis.cancel();
 }

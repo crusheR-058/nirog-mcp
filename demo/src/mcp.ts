@@ -48,6 +48,42 @@ export function demoAccess(): Promise<DemoAccess | null> {
   return demo;
 }
 
+/** The household's consent token: the one in settings, or on the public demo the one the server hands out. */
+export async function consentHeader(settings: Settings = loadSettings()): Promise<Record<string, string>> {
+  const token = settings.token || (await demoAccess())?.consentToken;
+  return token ? { authorization: `Bearer ${token}` } : {};
+}
+
+export interface AgentStep {
+  tool: string;
+  args: Record<string, unknown>;
+  result?: unknown;
+  error?: string;
+  ms: number;
+  by: "model" | "patterns" | "guard";
+}
+export interface AgentReply {
+  reply: string;
+  level: "routine" | "urgent" | "emergency";
+  steps: AgentStep[];
+  router: "model" | "patterns";
+  model: string | null;
+  routeMs: number;
+}
+
+/** The simulated Alexa+ device: the server's agent picks the MCP tools for these words. Null when it cannot be reached. */
+export async function callAgent(
+  settings: Settings,
+  body: { patientId: string; language: Settings["language"]; text: string; history: Array<{ role: "user" | "assistant"; text: string }>; transcript: Array<{ role: "user" | "assistant"; text: string }> },
+): Promise<AgentReply | null> {
+  try {
+    const r = await fetch(`${new URL(settings.endpoint).origin}/api/agent`, { method: "POST", headers: { "content-type": "application/json", ...(await consentHeader(settings)) }, body: JSON.stringify(body) });
+    return r.ok ? ((await r.json()) as AgentReply) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** One stateless client per call: the server is stateless too, and auth changes apply immediately. */
 export async function callTool(settings: Settings, tool: string, args: Record<string, unknown>): Promise<{ result?: unknown; error?: string; ms: number }> {
   const started = performance.now();

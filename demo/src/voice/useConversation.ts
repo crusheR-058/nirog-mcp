@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { callTool, loadSettings, saveSettings, type Settings } from "../mcp";
+import { callAgent, callTool, loadSettings, saveSettings, type Settings } from "../mcp";
 import { canListen, listenOnce, speak, stopSpeaking } from "../speech";
 import { patientById, refreshLive, useDemo, type Level } from "../store";
 
@@ -120,6 +120,46 @@ export function useConversation() {
 
       const pid = settings.patientId;
       const who = patientById(pid)?.fullName ?? pid;
+
+      // Alexa+ decides: the server's agent (Amazon Nova on Bedrock) reads the MCP tool descriptions and picks the tools.
+      // The patterns further down run only when the agent cannot be reached.
+      const asTurns = (ts: typeof turns) => ts.map((t) => ({ role: t.role, text: t.text }));
+      const agent = await callAgent(settings, {
+        patientId: pid,
+        language,
+        text,
+        history: asTurns(turns.slice(-12)),
+        transcript: intakeOpen.current ? asTurns(turns.slice(Math.min(intakeFrom.current, turns.length))) : [],
+      });
+      if (agent) {
+        const local = !useDemo.getState().live;
+        const chose = agent.steps.filter((s) => s.by !== "guard").map((s) => s.tool).join(" + ") || "no tool";
+        const rid = addTrace({ tool: "alexa+ agent", args: { router: agent.router, model: agent.model } });
+        finishTrace(rid, { ms: agent.routeMs, summary: [agent.router === "model" ? `${agent.model} chose ${chose} from the MCP tool descriptions` : agent.model ? `${agent.model} chose no tool; patterns chose ${chose}` : `no model answered; patterns chose ${chose}`] });
+        for (const s of agent.steps) {
+          const tid = addTrace({ tool: s.tool, args: s.args });
+          finishTrace(tid, { ms: s.ms, error: s.error, summary: [...(s.by === "guard" ? ["called by the triage guard: the rules flagged these words"] : []), ...summarize(s.tool, s.result)] });
+          if (local) addAudit({ actorName: "Alexa+ (nirog-mcp)", action: s.error ? `Refused ${s.tool}` : `Called ${s.tool}`, target: who, reason: s.error?.slice(0, 80) });
+          const res = (s.result ?? {}) as { memory?: { degraded?: boolean }; aria?: { complete?: boolean }; handover?: { consultId?: string | null } | null; consultId?: string | null; actions?: Array<{ type: string }> };
+          if (res.memory) setMemoryDegraded(Boolean(res.memory.degraded));
+          if (res.aria?.complete) setComplete(true);
+          if (res.handover?.consultId || res.consultId) bump("consults");
+          if (res.actions?.some((x) => x.type === "caregiver_alerted")) bump("alerts");
+        }
+        // The intake stays open while the agent keeps routing to it. Another tool, a handover or an escalation closes it.
+        const intake = agent.steps.find((s) => s.tool === "start_intake" && s.result);
+        if (!intake) intakeOpen.current = false;
+        else if (!intakeOpen.current) {
+          intakeOpen.current = true;
+          intakeFrom.current = turns.length;
+        }
+        if ((intake?.result as { aria?: { complete?: boolean } } | undefined)?.aria?.complete || agent.level !== "routine") intakeOpen.current = false;
+        setLevel(agent.level);
+        await say(agent.reply, agent.level);
+        void refreshLive();
+        return;
+      }
+
       const tool = route(text, namedMedicine(text, pid));
       // Decided here, when the tool is chosen, and not after the reply is spoken: people interrupt.
       if (tool !== "start_intake") intakeOpen.current = false;

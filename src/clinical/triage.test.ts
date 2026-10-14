@@ -8,6 +8,13 @@ describe("triage", () => {
     expect(r.matched[0].id).toBe("chest_pain_acs");
   });
 
+  it("hears chest pain the way people say it, not only the way notes write it", () => {
+    for (const said of ["my chest hurts and I am sweating", "there is pain in my chest and I feel breathless", "my chest feels tight and I can't catch my breath", "छाती दुख रही है और पसीना आ रहा है"]) {
+      expect(triage(said, [], said.match(/[ऀ-ॿ]/) ? "hi" : "en").level, said).toBe("emergency");
+    }
+    expect(triage("no pain in my chest, just sweating from the heat", []).level).toBe("routine");
+  });
+
   it("does not fire on negated symptoms", () => {
     expect(triage("no chest pain, just a cough and I'm not breathless").level).toBe("routine");
   });
