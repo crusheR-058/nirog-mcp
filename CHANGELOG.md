@@ -187,3 +187,19 @@ hackathon; this MCP server and Agent Skill are new.
     one at a time, every route has its own rate limit keyed by IPv4 or IPv6 /64, and Polly has a daily budget.
   - Stop and race bugs in the voice and the story.
 - 97 tests; agent evaluation 26/26.
+## 2026-10-15 (later)
+- A patient portal at `#/patient`, with "I'm a Patient" beside "I'm a Doctor" on the landing page
+  (`docs/PATIENT_PORTAL.md`, `docs/PLATFORM_EVOLUTION_PLAN.md`). Google sign-in binds an account to one clinic
+  record with a one-time link code, in one atomic statement; the session is a consent token scoped to the patient
+  and, for the account holder, their household, so the portal, the agent, the voice and the MCP tools all check the
+  same grant. `GET /api/patient/me` reads the patient ids out of the signed token, never from the request.
+- Migration `0002_patient_account.sql`: `account_sub`, `account_email`, `link_code`, `linked_at` on `patient`.
+  `NirogData` gained `listHousehold`, `findPatientByAccount`, `linkPatientAccount`, `listEncounters`,
+  `listHandovers`; `PatientRecord` carries `householdId` and `relationship`.
+- The page: Today, My history (one timeline labelled *You said*, *Summary for the doctor*, *The doctor*, *Dose
+  logged*, filtered by source and body region), Medicines ("I took it" calls `log_dose_taken` and is refused the
+  same way as Alexa+), Talk to Nirog (the real agent, pinned to the signed-in patient), Me (every trust-log line
+  about the patient). A missing memory read is shown as "could not be read", never as an empty history.
+- The doctor's chart shows whether the patient has claimed their portal account, and the link code to give them.
+- Tests for the link code (once, one account), the child-only scope, cross-patient reads, forged, expired and
+  missing tokens, and the public-demo chairs. 202 tests.

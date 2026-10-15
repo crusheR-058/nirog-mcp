@@ -121,6 +121,13 @@ pnpm consent-token pat_rahul,pat_aarav --sub yadav-household --days 30
 verified server-side, then a one-time check of the medical registration number and a clinic invite code against
 an allowlist. The server issues a signed 30-day session, so later visits need only Google.
 
+**Patients.** The patient page (`/demo/#/patient`, or "I'm a Patient") signs in with Google too, then binds the
+account to one clinic record with a one-time link code the doctor sees on the chart. The session is a consent
+token scoped to the patient and, for the account holder, their household: the same grant the Alexa+ tools and the
+agent check, so the page can run the real intake for its own patient and nobody else. The page shows the patient's
+own words, the summaries written for the doctor, the doctor's care plans, medicines and doses, and every trust-log
+line about them. Details, endpoints, schema and limits: [docs/PATIENT_PORTAL.md](docs/PATIENT_PORTAL.md).
+
 ## The web page
 
 `demo/` is a Vite + React page: glass panels over a Three.js particle sphere that reacts to the conversation.
@@ -138,6 +145,8 @@ an allowlist. The server issues a signed 30-day session, so later visits need on
   and the filed plan is what Alexa+ reads next. Without a database it shows a built-in clinic and keeps changes in
   the tab.
 - **Talk.** The conversation beside a trace of every tool call and what it returned.
+- **Patient portal.** Today, a labelled history timeline, medicines with "I took it" through the same dose tool,
+  the conversation pinned to the signed-in patient, and "who looked at my record".
 
 ```bash
 pnpm dev:demo       # Vite on :5173 with hot reload, proxying to the server on :3333

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { Brain, ChatCircleDots, FolderOpen, GithubLogo, Monitor, Path, Siren, SquaresFour, Stethoscope, UsersThree, Waveform } from "@phosphor-icons/react";
+import { Brain, ChatCircleDots, FolderOpen, GithubLogo, Monitor, Path, Siren, SquaresFour, Stethoscope, User, UsersThree, Waveform } from "@phosphor-icons/react";
 import { SECTIONS } from "./copy";
 import { CaseFile } from "./sections/CaseFile";
 import { Deck } from "./sections/Deck";
@@ -18,6 +18,7 @@ import { StoryPlayer, useStory } from "./tour/StoryPlayer";
 
 const Background = lazy(() => import("./bg/Background").then((m) => ({ default: m.Background })));
 const DoctorPage = lazy(() => import("./doctor/DoctorPage").then((m) => ({ default: m.DoctorPage })));
+const PatientPage = lazy(() => import("./patient/PatientPage").then((m) => ({ default: m.PatientPage })));
 
 const useHashRoute = () => {
   const [hash, setHash] = useState(location.hash);
@@ -52,18 +53,21 @@ export default function App() {
   const hash = useHashRoute();
   const setRoute = useDemo((s) => s.setRoute);
   const isDoctor = hash.startsWith("#/doctor");
-  useEffect(() => setRoute(isDoctor ? "doctor" : "deck"), [isDoctor, setRoute]);
+  const isPatient = hash.startsWith("#/patient");
+  // The 3D field keeps out of the way on both portals.
+  useEffect(() => setRoute(isDoctor || isPatient ? "doctor" : "deck"), [isDoctor, isPatient, setRoute]);
   // The portal reads what the MCP tools wrote. Poll gently; a tool call also refreshes at once.
   useEffect(() => {
+    if (isPatient) return;
     void refreshLive();
     const t = setInterval(() => void refreshLive(), 5000);
     return () => clearInterval(t);
-  }, [isDoctor]);
-  if (isDoctor) {
+  }, [isDoctor, isPatient]);
+  if (isDoctor || isPatient) {
     return (
       <div className="app">
         <Suspense fallback={<div className="bg" aria-hidden="true" />}><Background /></Suspense>
-        <Suspense fallback={null}><DoctorPage onBack={() => { location.hash = ""; }} /></Suspense>
+        <Suspense fallback={null}>{isDoctor ? <DoctorPage onBack={() => { location.hash = ""; }} /> : <PatientPage onBack={() => { location.hash = ""; }} />}</Suspense>
       </div>
     );
   }
@@ -104,7 +108,8 @@ function Deck3() {
         </div>
         <div className="topbar-right">
           <span className="clock"><Clock /><small>Sultanpur, UP</small></span>
-          <a className="btn doctor-cta" href="#/doctor"><Stethoscope size={16} weight="bold" /> I'm a Doctor</a>
+          <a className="btn doctor-cta" href="#/patient"><User size={16} weight="bold" /> <span>I'm a Patient</span></a>
+          <a className="btn doctor-cta ghost-cta" href="#/doctor"><Stethoscope size={16} weight="bold" /> <span>I'm a Doctor</span></a>
           <a className="icon-btn" href="https://github.com/crusheR-058/nirog-mcp" target="_blank" rel="noreferrer" aria-label="nirog-mcp on GitHub"><GithubLogo size={18} weight="bold" /></a>
         </div>
       </header>

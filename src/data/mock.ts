@@ -1,14 +1,19 @@
 import { randomUUID } from "node:crypto";
-import { ClinicConflict, type AuditRecord, type ConsultRecord, type ConsultRequest, type DoseRecord, type EncounterRecord, type NewEncounter, type NewHandover, type NirogData, type PatientRecord } from "./types.js";
+import { ClinicConflict, type AuditRecord, type ConsultRecord, type ConsultRequest, type DoseRecord, type EncounterRecord, type NewEncounter, type HandoverRecord, type NewHandover, type NirogData, type PatientRecord } from "./types.js";
 
 /** Demo fixtures mirroring the Nirog doctor portal seed, so demos work with no database. */
 export const MOCK_PATIENTS: PatientRecord[] = [
-  { id: "pat_rahul", fullName: "Rahul Yadav", preferredLanguage: "Hindi", allergies: [], conditions: ["Hypertension"], currentMedications: ["Amlodipine 5mg OD"] },
-  { id: "pat_sunita", fullName: "Sunita Devi", preferredLanguage: "Hindi", allergies: ["Sulfa drugs"], conditions: ["Type 2 Diabetes"], currentMedications: ["Metformin 500mg BD"] },
-  { id: "pat_meena", fullName: "Meena Singh", preferredLanguage: "Hindi", allergies: [], conditions: [], currentMedications: [] },
-  { id: "pat_aarav", fullName: "Aarav Yadav", preferredLanguage: "Hindi", allergies: [], conditions: [], currentMedications: [] },
-  { id: "pat_imran", fullName: "Imran Khan", preferredLanguage: "Hindi", allergies: ["Penicillin"], conditions: ["Asthma"], currentMedications: ["Salbutamol inhaler PRN"] },
-  { id: "pat_lakshmi", fullName: "Lakshmi Bai", preferredLanguage: "Hindi", allergies: [], conditions: ["Osteoarthritis", "Hypertension"], currentMedications: ["Telmisartan 40mg OD"] },
+  { id: "pat_rahul", fullName: "Rahul Yadav", householdId: "hh_yadav", relationship: "self", preferredLanguage: "Hindi", allergies: [], conditions: ["Hypertension"], currentMedications: ["Amlodipine 5mg OD"] },
+  { id: "pat_sunita", fullName: "Sunita Devi", householdId: "hh_sunita", relationship: "self", preferredLanguage: "Hindi", allergies: ["Sulfa drugs"], conditions: ["Type 2 Diabetes"], currentMedications: ["Metformin 500mg BD"] },
+  { id: "pat_meena", fullName: "Meena Singh", householdId: "hh_meena", relationship: "self", preferredLanguage: "Hindi", allergies: [], conditions: [], currentMedications: [] },
+  { id: "pat_aarav", fullName: "Aarav Yadav", householdId: "hh_yadav", relationship: "child", preferredLanguage: "Hindi", allergies: [], conditions: [], currentMedications: [] },
+  { id: "pat_imran", fullName: "Imran Khan", householdId: "hh_imran", relationship: "self", preferredLanguage: "Hindi", allergies: ["Penicillin"], conditions: ["Asthma"], currentMedications: ["Salbutamol inhaler PRN"] },
+  { id: "pat_lakshmi", fullName: "Lakshmi Bai", householdId: "hh_yadav", relationship: "parent", preferredLanguage: "Hindi", allergies: [], conditions: ["Osteoarthritis", "Hypertension"], currentMedications: ["Telmisartan 40mg OD"] },
+];
+
+/** The codes the demo clinic hands its patients to claim a portal account. Same values as the seed. */
+export const MOCK_LINK_CODES: ReadonlyArray<[string, string]> = [
+  ["RY-4821", "pat_rahul"], ["SD-7304", "pat_sunita"], ["MS-1197", "pat_meena"], ["AY-6630", "pat_aarav"], ["IK-2258", "pat_imran"], ["LB-9045", "pat_lakshmi"],
 ];
 
 export const MOCK_ENCOUNTERS: EncounterRecord[] = [
@@ -63,6 +68,9 @@ export class MockData implements NirogData {
   audit: AuditRecord[] = [];
   doses: DoseRecord[] = [];
   handovers: Array<NewHandover & { id: string }> = [];
+  /** Portal accounts: Google subject -> patient id. */
+  accounts = new Map<string, string>();
+  linkCodes = new Map(MOCK_LINK_CODES);
 
   constructor(
     private patients: PatientRecord[] = MOCK_PATIENTS,
@@ -75,6 +83,37 @@ export class MockData implements NirogData {
 
   async listPatients() {
     return this.patients;
+  }
+
+  async listHousehold(patientId: string) {
+    const me = await this.getPatient(patientId);
+    if (!me) return [];
+    return me.householdId ? this.patients.filter((p) => p.householdId === me.householdId) : [me];
+  }
+
+  async findPatientByAccount(accountSub: string) {
+    const id = this.accounts.get(accountSub);
+    return id ? this.getPatient(id) : null;
+  }
+
+  async linkPatientAccount(linkCode: string, accountSub: string) {
+    const code = linkCode.trim().toUpperCase();
+    const id = this.linkCodes.get(code);
+    if (!id || [...this.accounts.values()].includes(id)) return null;
+    this.linkCodes.delete(code);
+    this.accounts.set(accountSub, id);
+    return this.getPatient(id);
+  }
+
+  async listEncounters(patientId: string) {
+    return this.encounters.filter((e) => e.patientId === patientId && e.endedAt).sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+  }
+
+  async listHandovers(patientId: string): Promise<HandoverRecord[]> {
+    return this.handovers
+      .filter((h) => h.patientId === patientId)
+      .map(({ now, ...h }) => ({ ...h, createdAt: now.toISOString() }))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
   async getLatestEncounter(patientId: string) {

@@ -235,6 +235,14 @@ function Chart() {
         </div>
         <aside className="chart-side">
           <div className="glass card"><span className="eyebrow">Conditions</span><p>{p.conditions.length ? p.conditions.join(", ") : "None recorded"}</p><span className="eyebrow">Medications</span><p>{p.medications.length ? p.medications.join(", ") : "None"}</p></div>
+          {p.portal && (
+            <div className="glass card">
+              <span className="eyebrow">Patient portal</span>
+              {p.portal.linked ? <p><CheckCircle size={14} weight="fill" style={{ color: "var(--teal)", verticalAlign: -2 }} /> The patient has claimed their record and can read it at <code>/#/patient</code>.</p>
+              : p.portal.linkCode ? <><p className="muted small">Not yet claimed. Give the patient this one-time code; with Google sign-in it opens their own record and nobody else's.</p><p className="link-code">{p.portal.linkCode}</p></>
+              : <p className="muted">No link code on file. Ask the clinic admin to issue one.</p>}
+            </div>
+          )}
           <div className="glass card"><span className="eyebrow">Documents</span><p className="muted">No documents yet.</p><button className="ghost small"><Plus size={14} weight="bold" /> Upload</button></div>
           <div className="glass card"><span className="eyebrow"><Lock size={12} weight="fill" /> Access</span><p className="muted small">Every read of this chart is logged with who, what and why. Consent can be revoked by the patient at any time.</p></div>
         </aside>

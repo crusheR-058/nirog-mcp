@@ -1,11 +1,13 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { ClinicConflict, type AuditRecord, type ClinicSnapshot, type ConsultRecord, type ConsultRequest, type DoseRecord, type EncounterRecord, type NewEncounter, type NewHandover, type NirogData, type PatientRecord } from "./types.js";
+import { ClinicConflict, type AuditRecord, type ClinicSnapshot, type ConsultRecord, type ConsultRequest, type DoseRecord, type EncounterRecord, type NewEncounter, type HandoverRecord, type NewHandover, type NirogData, type PatientRecord } from "./types.js";
 
-const PATIENT_COLS = "id, full_name, preferred_language, allergies, conditions, current_medications";
+const PATIENT_COLS = "id, full_name, household_id, relationship, preferred_language, allergies, conditions, current_medications";
 
 interface PatientRow {
   id: string;
   full_name: string;
+  household_id: string | null;
+  relationship: string;
   preferred_language: string;
   allergies: string[];
   conditions: string[];
@@ -15,6 +17,8 @@ interface PatientRow {
 const toPatient = (r: PatientRow): PatientRecord => ({
   id: r.id,
   fullName: r.full_name,
+  householdId: r.household_id,
+  relationship: r.relationship,
   preferredLanguage: r.preferred_language,
   allergies: r.allergies,
   conditions: r.conditions,
@@ -43,6 +47,62 @@ export class SupabaseData implements NirogData {
     const { data, error } = await this.client.from("patient").select(PATIENT_COLS).order("full_name");
     if (error) throw new Error(`Patient list failed: ${error.message}`);
     return ((data as PatientRow[]) ?? []).map(toPatient);
+  }
+
+  async listHousehold(patientId: string): Promise<PatientRecord[]> {
+    const me = await this.getPatient(patientId);
+    if (!me) return [];
+    if (!me.householdId) return [me];
+    const { data, error } = await this.client.from("patient").select(PATIENT_COLS).eq("household_id", me.householdId).order("full_name");
+    if (error) throw new Error(`Household lookup failed: ${error.message}`);
+    return ((data as PatientRow[]) ?? []).map(toPatient);
+  }
+
+  async findPatientByAccount(accountSub: string): Promise<PatientRecord | null> {
+    const { data, error } = await this.client.from("patient").select(PATIENT_COLS).eq("account_sub", accountSub).maybeSingle();
+    if (error) throw new Error(`Account lookup failed: ${error.message}`);
+    return data ? toPatient(data as PatientRow) : null;
+  }
+
+  async linkPatientAccount(linkCode: string, accountSub: string, email: string | null): Promise<PatientRecord | null> {
+    // One statement: the code must still be unclaimed when the account is written, so two sign-ins cannot both take it.
+    const { data, error } = await this.client
+      .from("patient")
+      .update({ account_sub: accountSub, account_email: email, link_code: null, linked_at: new Date().toISOString() })
+      .eq("link_code", linkCode.trim().toUpperCase())
+      .is("account_sub", null)
+      .select(PATIENT_COLS);
+    if (error) throw new Error(`Linking the account failed: ${error.message}`);
+    return data?.[0] ? toPatient(data[0] as PatientRow) : null;
+  }
+
+  async listEncounters(patientId: string): Promise<EncounterRecord[]> {
+    const { data, error } = await this.client
+      .from("encounter")
+      .select("id, patient_id, started_at, ended_at, chief_complaint, assessment, clinical_notes, prescriptions, lab_requests, follow_up")
+      .eq("patient_id", patientId)
+      .not("ended_at", "is", null)
+      .order("started_at", { ascending: false })
+      .limit(100);
+    if (error) throw new Error(`Encounter list failed: ${error.message}`);
+    return (data ?? []).map((e) => ({
+      id: e.id, patientId: e.patient_id, startedAt: e.started_at, endedAt: e.ended_at, chiefComplaint: e.chief_complaint, assessment: e.assessment,
+      clinicalNotes: e.clinical_notes, prescriptions: e.prescriptions ?? [], labRequests: e.lab_requests ?? [], followUp: e.follow_up ?? null,
+    }));
+  }
+
+  async listHandovers(patientId: string): Promise<HandoverRecord[]> {
+    const { data, error } = await this.client
+      .from("handover")
+      .select("id, patient_id, created_at, chief_complaint, narrative, symptoms, red_flags, suggested_triage, language")
+      .eq("patient_id", patientId)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (error) throw new Error(`Handover list failed: ${error.message}`);
+    return (data ?? []).map((h) => ({
+      id: h.id, patientId: h.patient_id, createdAt: h.created_at, chiefComplaint: h.chief_complaint, narrative: h.narrative,
+      symptoms: h.symptoms, redFlags: h.red_flags, triage: h.suggested_triage, language: h.language,
+    }));
   }
 
   async getLatestEncounter(patientId: string): Promise<EncounterRecord | null> {
@@ -196,6 +256,7 @@ export class SupabaseData implements NirogData {
         id: p.id, fullName: p.full_name, sex: p.sex ?? "", dateOfBirth: p.date_of_birth ?? "", village: p.village ?? "", district: p.district ?? "",
         language: p.preferred_language, abha: p.abha_linked, relationship: p.relationship, allergies: p.allergies, conditions: p.conditions,
         medications: p.current_medications, consent: p.consent,
+        portal: { linkCode: p.link_code ?? null, linked: Boolean(p.account_sub) },
       })),
       doctors: (doctors.data ?? []).map((d) => ({
         id: d.id, name: d.name, spec: d.specialty, exp: d.experience_years ?? 0, rating: Number(d.rating ?? 0), fee: d.fee_inr ?? 0, online: d.online, langs: d.languages.join(", "),

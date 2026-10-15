@@ -13,6 +13,7 @@ import { mintToken, verifyToken } from "./tokens.js";
  *   POST /auth/doctor/session          { idToken, session? }   Google step; returns a session if this doctor was verified before
  *   POST /auth/doctor/verify           { idToken, registrationNo, inviteCode }   one-time verification; returns a new session
  *   POST /auth/doctor/signout          nothing to revoke server-side (sessions are signed), kept for symmetry
+ *   POST /auth/patient/session         { idToken, linkCode? }   patient sign-in; returns a consent token scoped to their record (and household)
  *   GET  /auth/demo                    PUBLIC_DEMO only: a short-lived consent token for the demo household and a demo doctor session
  *   POST /auth/demo/reset              PUBLIC_DEMO only: put the demo clinic back as seeded, at most once a minute
  *
@@ -71,6 +72,51 @@ export function authRoutes(): Router {
   });
 
   r.post("/doctor/signout", (_req: Request, res: Response) => res.json({ ok: true }));
+
+  /**
+   * Patient sign-in. Google says who holds the account; the clinic's one-time link code says which record is theirs.
+   * The session is a consent token (the same kind Alexa+ carries), scoped to the patient and, for the account holder,
+   * their household. Nothing in the request can name a patient id.
+   *
+   * On the public demo a visitor picks one of the fictional patients instead ({ demo: { patientId } }), and on an open
+   * development server a labelled demo identity may claim a record with a link code, so the flow can be walked through.
+   */
+  r.post("/patient/session", async (req: Request, res: Response) => {
+    const data = getDataSource();
+    const { linkCode, demo } = req.body as { linkCode?: string; demo?: { patientId?: string; email?: string; name?: string } };
+    try {
+      let patient = null;
+      let identity: { sub: string; email: string; name: string; picture?: string };
+      if (publicDemo && demo?.patientId) {
+        // Fictional patients only; a demo visitor is handed Rahul's chair, not a way to pick records on a real server.
+        if (!MOCK_PATIENTS.some((p) => p.id === demo.patientId)) return res.status(403).json({ error: "Not a demo patient." });
+        patient = await data.getPatient(demo.patientId);
+        identity = { sub: `demo:${demo.patientId}`, email: "", name: patient?.fullName ?? "" };
+      } else {
+        identity = await identify(req);
+        const sub = `google:${identity.sub}`;
+        patient = await data.findPatientByAccount(sub);
+        if (!patient && linkCode) {
+          patient = await data.linkPatientAccount(linkCode, sub, identity.email || null);
+          if (!patient) return res.status(403).json({ error: "That link code is not valid, or the record was already claimed. Ask your clinic for a new one." });
+          await audit(data, "Linked portal account", patient.fullName, "The patient claimed their record with the clinic's link code", patient.fullName);
+        }
+        if (!patient) return res.json({ status: "needs-link", identity: { email: identity.email, name: identity.name, picture: identity.picture } });
+      }
+      if (!patient) return res.status(404).json({ error: "No such patient." });
+      const household = await data.listHousehold(patient.id);
+      // The account holder sees the family they care for; a child or parent on someone's account sees only themselves.
+      const patients = patient.relationship === "self" ? household.map((p) => p.id) : [patient.id];
+      const hours = identity.sub.startsWith("demo:") ? 6 : 30 * 24;
+      const token = mintToken({ sub: `patient:${patient.id}`, patients, exp: Math.floor(Date.now() / 1000) + hours * 3600 }, sessionSecret());
+      await audit(data, "Opened the patient portal", patient.fullName, identity.sub.startsWith("demo:") ? "Public demo" : "Google sign-in", patient.fullName);
+      res.json({ status: "linked", token, patient, household: household.filter((p) => patients.includes(p.id)), identity: { email: identity.email, name: identity.name, picture: identity.picture } });
+    } catch (e) {
+      if (e instanceof GoogleAuthError) return res.status(401).json({ error: e.message });
+      console.error("[auth] patient session:", e instanceof Error ? e.message : String(e));
+      res.status(503).json({ error: "Sign-in is not possible just now." });
+    }
+  });
 
   // Judges share one demo clinic. Each can start the story from the seeded state; a reset in the last minute counts.
   let lastReset = 0;

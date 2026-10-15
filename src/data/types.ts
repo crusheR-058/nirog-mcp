@@ -6,6 +6,10 @@ export class ClinicConflict extends Error {}
 export interface PatientRecord {
   id: string;
   fullName: string;
+  /** Patients in one household share an account holder; null for a patient on their own. */
+  householdId: string | null;
+  /** "self" for the account holder, otherwise how this patient relates to them (child, parent, spouse). */
+  relationship: string;
   preferredLanguage: string;
   allergies: string[];
   conditions: string[];
@@ -45,6 +49,18 @@ export interface EncounterRecord {
   prescriptions: PrescribedItem[];
   labRequests: LabRequest[];
   followUp: FollowUp | null;
+}
+
+/** A handover as stored, for the patient's own history. */
+export interface HandoverRecord extends Omit<NewHandover, "now"> {
+  id: string;
+  createdAt: string; // ISO
+}
+
+/** Whether a patient has claimed their portal account, and the code the clinic gives them to do so. Doctor-only. */
+export interface PortalStatus {
+  linkCode: string | null;
+  linked: boolean;
 }
 
 export interface ConsultRequest {
@@ -88,6 +104,7 @@ export interface ClinicSnapshot {
   patients: Array<{
     id: string; fullName: string; sex: string; dateOfBirth: string; village: string; district: string; language: string;
     abha: boolean; relationship: string; allergies: string[]; conditions: string[]; medications: string[]; consent: "active" | "pending";
+    portal: PortalStatus;
   }>;
   doctors: Array<{ id: string; name: string; spec: string; exp: number; rating: number; fee: number; online: boolean; langs: string }>;
   handovers: Array<{
@@ -137,6 +154,17 @@ export interface DoseRecord {
 export interface NirogData {
   getPatient(patientId: string): Promise<PatientRecord | null>;
   listPatients(): Promise<PatientRecord[]>;
+  /** Everyone in this patient's household, the patient included. Just the patient when they have no household. */
+  listHousehold(patientId: string): Promise<PatientRecord[]>;
+  /** The patient whose portal account is this Google subject, or null. */
+  findPatientByAccount(accountSub: string): Promise<PatientRecord | null>;
+  /** Claim a record with the clinic's link code. Binds the account to that one patient; null if the code is unknown
+   *  or the record is already claimed. The code works once. */
+  linkPatientAccount(linkCode: string, accountSub: string, email: string | null): Promise<PatientRecord | null>;
+  /** Every completed encounter, newest first. */
+  listEncounters(patientId: string): Promise<EncounterRecord[]>;
+  /** Every handover written for this patient, newest first. */
+  listHandovers(patientId: string): Promise<HandoverRecord[]>;
   /** Most recent completed encounter, which is the active care plan. */
   getLatestEncounter(patientId: string): Promise<EncounterRecord | null>;
   /** Put the patient in the on-call doctor's queue. Returns the queue entry id. */

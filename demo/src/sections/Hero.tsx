@@ -1,4 +1,4 @@
-import { ArrowDown, Brain, Play, ShieldCheck, Waveform } from "@phosphor-icons/react";
+import { ArrowDown, Brain, Play, ShieldCheck, Stethoscope, User, Waveform } from "@phosphor-icons/react";
 
 export function Hero({ onNext, onPlay }: { onNext: () => void; onPlay: () => void }) {
   return (
@@ -27,6 +27,11 @@ export function Hero({ onNext, onPlay }: { onNext: () => void; onPlay: () => voi
           </button>
         </div>
         <p className="muted small hero-note">One evening, both chairs, played live on this page: a real agent, real tool calls, a real clinic record. Sound on.</p>
+        <div className="hero-doors">
+          <a className="btn" href="#/patient"><User size={16} weight="bold" /> I'm a Patient</a>
+          <a className="btn" href="#/doctor"><Stethoscope size={16} weight="bold" /> I'm a Doctor</a>
+          <span className="muted small">Your own record, or the clinic's queue. Both sign in with Google.</span>
+        </div>
       </div>
     </section>
   );

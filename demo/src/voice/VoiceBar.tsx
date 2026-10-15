@@ -12,7 +12,7 @@ const PLACEHOLDER = {
 };
 
 /** The glass bar that follows the page. Every reply you hear is a tool result from nirog-mcp. */
-export function VoiceBar({ convo }: { convo: Convo }) {
+export function VoiceBar({ convo, quiet }: { convo: Convo; quiet?: boolean }) {
   const [typed, setTyped] = useState("");
   const [show, setShow] = useState(false);
   const lastReply = useDemo((s) => s.lastReply);
@@ -29,7 +29,7 @@ export function VoiceBar({ convo }: { convo: Convo }) {
     return () => clearTimeout(t);
   }, [lastReply]);
 
-  const replyVisible = show && lastReply && section !== SECTIONS.length - 1;
+  const replyVisible = !quiet && show && lastReply && section !== SECTIONS.length - 1;
 
   return (
     <div className="voicebar-wrap" lang={lang}>

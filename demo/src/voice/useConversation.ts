@@ -79,9 +79,12 @@ export function summarize(tool: string, r: unknown): string[] {
   return out;
 }
 
-/** One conversation, shared by the voice bar and the Talk section. */
-export function useConversation() {
-  const [settings, setSettings] = useState<Settings>(loadSettings);
+/**
+ * One conversation, shared by the voice bar and the Talk section. With `fixed`, the patient and token are the signed-in
+ * patient's own and are not written back to the page's saved settings.
+ */
+export function useConversation(fixed?: Pick<Settings, "patientId" | "token">) {
+  const [settings, setSettings] = useState<Settings>(() => ({ ...loadSettings(), ...fixed }));
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
   const [health, setHealth] = useState<"unknown" | "ok" | "bad">("unknown");
   const { phase, turns, setPhase, setLevel, addTurn, addTrace, finishTrace, setComplete, bump, addAudit, addQueue, setMemoryDegraded } = useDemo();
@@ -91,7 +94,12 @@ export function useConversation() {
   const intakeFrom = useRef(0);
   const intakeOpen = useRef(false);
 
-  useEffect(() => saveSettings(settings), [settings]);
+  useEffect(() => {
+    if (!fixed) saveSettings(settings);
+  }, [settings, fixed]);
+  useEffect(() => {
+    if (fixed) setSettings((s) => ({ ...s, ...fixed }));
+  }, [fixed?.patientId, fixed?.token]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const url = settings.endpoint.replace(/\/mcp\/?$/, "/health");
     fetch(url).then((r) => setHealth(r.ok ? "ok" : "bad")).catch(() => setHealth("bad"));

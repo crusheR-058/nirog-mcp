@@ -21,6 +21,8 @@ export interface Patient {
   medications: string[];
   tone: Tone;
   consent: "active" | "pending";
+  /** From the server's clinic only: whether the patient has claimed their portal account, and the code to give them. */
+  portal?: { linkCode: string | null; linked: boolean };
 }
 
 export const DOCTOR = {

@@ -37,8 +37,8 @@ console.log("  ok  memory schema");
 if (flavour === "pgvector") {
   const db = new pg.Client({ connectionString: url });
   await db.connect();
-  const files = ["supabase/migrations/0001_clinic.sql", "supabase/reset-demo.sql", "supabase/seed.sql"];
-  if (!reset) files.splice(1, 1);
+  const files = ["supabase/migrations/0001_clinic.sql", "supabase/migrations/0002_patient_account.sql", "supabase/reset-demo.sql", "supabase/seed.sql"];
+  if (!reset) files.splice(2, 1);
   for (const f of files) {
     await db.query(readFileSync(f, "utf8"));
     console.log(`  ok  ${f}`);
