@@ -9,6 +9,13 @@ Under 3 minutes. Public on YouTube, in English. The rules ask that it show the p
 
 The story is one evening for one patient, told from both chairs: Rahul tells Alexa+ his back pain is back, the
 doctor reads Alexa's handover and prescribes, and that night Alexa+ reads him the new plan and stops a double dose.
+The generated video adds a last chapter: Rahul opens his own record ("I'm a Patient"), sees the plan the doctor
+just filed and every word he said, and asks ARIA, the mobile app's nurse, what to take tonight.
+
+If you record by hand, add that chapter after beat 8: press **I'm a Patient**, choose Rahul, show **Today** (the
+new Ibuprofen beside the Amlodipine), **My history** (his sentences, the summary, the doctor's plan, in order),
+then **Talk to Nirog** and type "what medicines do I take tonight". Say: *"The same record, from the patient's
+chair. His own words, kept as he said them; the doctor's plan, the moment it was filed; and who looked."*
 
 ## Before you record
 

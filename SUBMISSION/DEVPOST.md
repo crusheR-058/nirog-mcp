@@ -90,6 +90,17 @@ doctor's real buttons.
 to edit or delete a line of it. The doctor's portal reads the log, the queue and the chart from the same server,
 so a consult raised by voice in one room appears on the doctor's screen in another.
 
+**The patient has their own door.** "I'm a Patient" opens a patient's own view of the same record: the sentences
+they said, unedited and placed on the body; the summaries written for the doctor; the doctor's care plans; their
+medicines, with "I took it" going through the same dose tool and refused the same way; and every line of the
+trust log about them, so they can see who looked. Google proves who holds the account; a one-time code from the
+clinic, shown on the doctor's chart, binds it to one record. The session is the same consent token Alexa+ carries,
+scoped to the patient and their household, so the portal, the agent and the tools can never disagree about
+access. A family account sees the people it cares for; a child on it sees only themselves.
+
+**ARIA has a face.** On the patient's "Talk to Nirog" screen the mobile app's 3D nurse, Chloe, speaks the
+replies, lip-synced to Polly's audio. The scene is the app's own, unmodified; the web gave it the host it expects.
+
 ## How we built it
 
 - **MCP server:** TypeScript, the official MCP SDK, stateless Streamable HTTP so it scales horizontally. Six
@@ -112,19 +123,30 @@ so a consult raised by voice in one room appears on the doctor's screen in anoth
   speech in and out that is a real MCP client of the real server, beside a trace of every tool call, and the
   doctor's portal on the same record. On the deployment, a visitor gets a short-lived consent token for the
   fictional demo household, so judges can use it with no Alexa+ account and no clinic login.
-- **97 automated tests,** all offline, covering the rules, the Hindi handling, the double-dose guards, consent,
-  the handovers, and the clinic API; plus an end-to-end run in a headless browser against Supabase and Bedrock.
+- **Patient identity:** a Google subject is bound to one patient row by a one-time clinic link code, in one atomic
+  statement; the row's own column, no second table, no policy that trusts a name or an email. The patient's
+  session is a consent token, so one verifier serves the portal, the agent, the voice and the MCP tools.
+- **The avatar:** the mobile app's 1,636-line Three.js scene runs byte-identical in an iframe. A shim provides
+  the host it expects and translates its voice call into this server's Polly route with the patient's token.
+  The 14.9 MB model was converted once with glTF-Transform (quantized meshes, WebP textures) to 6.3 MB, and
+  loads only on that screen.
+- **202 automated tests,** all offline, covering the rules, the Hindi handling, the double-dose guards, consent,
+  the handovers, the clinic API and the patient API (cross-patient reads, forged and expired tokens, the link
+  code); plus end-to-end runs in a headless browser against Supabase and Bedrock.
 
 ## What was built during the hackathon, and what was not
 
 The Nirog project existed before this hackathon (https://github.com/Shivang-creator/nirog). From it we ported,
 with attribution: the body-region lexicon, the region-inheritance logic, the recurrence rule, the offline and
-Titan embedders, the SBAR handover builder, ARIA's intake prompt, and the demo patients.
+Titan embedders, the SBAR handover builder, ARIA's intake prompt, and the demo patients. The 3D nurse avatar and
+the Three.js scene that animates her come from Nirog's patient mobile app, unmodified; bringing them to the web,
+the compression, and the voice bridge are new.
 
 Everything else in this repository was written during the submission window, and its history starts on
 7 October 2026: the MCP server and all six tools, the Agent Skill, the triage rules, Hindi support, consent
 tokens, doctor sign-in, the dose and family-summary logic, the trust log and clinic API, the Postgres memory
-store, the Supabase schema and the closed care loop, the deployment scripts, the tests, and the entire web page.
+store, the Supabase schema and the closed care loop, the patient portal and patient accounts, the deployment
+scripts, the tests, and the entire web page.
 CHANGELOG.md records it day by day.
 
 ## Challenges we ran into
@@ -204,6 +226,9 @@ CHANGELOG.md records it day by day.
 - **Live:** https://j2fkpyar4b.ap-south-1.awsapprunner.com/demo/ — press **Play the 3-minute story**, sound on.
   Simulated Alexa+ and the doctor portal on one live record; no account needed. The MCP endpoint is `/mcp` and
   needs a consent token.
+- **As a patient:** press **I'm a Patient** and sit in Rahul's chair (fictional). His history, his medicines, and
+  ARIA's face on "Talk to Nirog". The link-code flow needs a Google client id, so the public demo offers the chairs
+  instead; `docs/PATIENT_PORTAL.md` has the codes for a local server.
 - **Locally, in three commands:**
 
   ```bash

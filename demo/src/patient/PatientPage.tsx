@@ -226,6 +226,8 @@ function Portal({ session, me, loading, error, refresh, signOut }: { session: Pa
   useEffect(() => { if (turns) refresh(); }, [turns]); // eslint-disable-line react-hooks/exhaustive-deps
   // Leaving the page ends the conversation: the landing page must not inherit a patient's turns, nor a half-spoken line.
   useEffect(() => () => { stopSpeaking(); useDemo.getState().reset(); }, []);
+  // A plan the doctor files in another room shows up here without a reload.
+  useEffect(() => { const t = setInterval(refresh, 15_000); return () => clearInterval(t); }, [refresh]);
 
   return (
     <div className={`doctor-page level-${level}`}>

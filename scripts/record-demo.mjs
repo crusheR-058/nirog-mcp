@@ -73,6 +73,29 @@ await cdp.send("Page.startScreencast", { format: "jpeg", quality: 85, maxWidth: 
 await page.getByRole("button", { name: /Play the .* story/ }).click();
 await page.waitForFunction(() => document.querySelector(".story h4")?.textContent === "One evening, both chairs", null, { timeout: 480_000, polling: 500 });
 await page.waitForTimeout(3500);
+
+/* ── 2b. The patient's own door: Rahul sees the plan the doctor just filed, then ARIA's face ───────── */
+const narrate = (text) => lines.push({ text, language: "en", at: Date.now(), narrator: true });
+narrate("And Rahul has his own door. Signed in as himself, he sees the plan the doctor just filed, every word he said, and who looked at his record.");
+await page.evaluate(() => { location.hash = "#/patient"; });
+await page.getByRole("button", { name: /Rahul Yadav/ }).click();
+await page.waitForSelector(".pgreet h1", { timeout: 30_000 });
+await page.waitForTimeout(5500);
+await page.locator(".ptabs").getByRole("button", { name: "My history", exact: true }).click();
+await page.waitForTimeout(5500);
+narrate("On Talk to Nirog, the mobile app's nurse, Chloe, speaks the same replies, through Amazon Polly.");
+await page.locator(".ptabs").getByRole("button", { name: "Talk to Nirog", exact: true }).click();
+try {
+  await page.waitForSelector(".aria-stage.ready", { timeout: 60_000 });
+  await page.waitForTimeout(2500);
+  await page.fill("#ask", "what medicines do I take tonight");
+  await page.press("#ask", "Enter");
+  await page.waitForSelector(".turn.assistant", { timeout: 40_000 });
+  await page.waitForFunction(() => !document.querySelector(".aria-stage.speaking") && document.querySelector(".mic.idle"), null, { timeout: 40_000, polling: 300 });
+} catch (e) {
+  console.warn("ARIA did not finish in time; the chapter ends here:", e.message);
+}
+await page.waitForTimeout(2000);
 await cdp.send("Page.stopScreencast");
 await browser.close();
 await Promise.all(writes);
@@ -92,7 +115,7 @@ console.log(`story ${storyLen.toFixed(1)} s, played at ${speed.toFixed(2)}x to f
 const voiced = [];
 for (const [i, l] of lines.entries()) {
   const file = join(work, `line-${i}.mp3`);
-  await say(l.text, file, { lang: l.language === "hi" ? "hi-IN" : "en-IN" });
+  await say(l.text, file, l.narrator ? { voice: "Matthew", lang: "en-US" } : { lang: l.language === "hi" ? "hi-IN" : "en-IN" });
   voiced.push({ file, at: (l.at - t0) / 1000 / speed, tempo: (l.rate ?? 1) * speed });
 }
 
