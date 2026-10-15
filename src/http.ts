@@ -12,6 +12,7 @@ import { authRoutes } from "./auth/routes.js";
 import { clinicRoutes } from "./clinic/routes.js";
 import { agentRoutes } from "./agent/routes.js";
 import { patientRoutes } from "./patient/routes.js";
+import { ARIA_SCENE_HTML } from "./aria/scene.js";
 
 const PORT = Number(process.env.PORT ?? 3333);
 const HOST = process.env.HOST ?? "127.0.0.1";
@@ -94,6 +95,11 @@ app.use("/api/clinic", clinicRoutes());
 
 // What a signed-in patient reads about themselves: their own words, handovers, care plans and doses.
 app.use("/api/patient", patientRoutes());
+
+// ARIA's face for the patient page: the mobile app's 3D scene, served for a same-origin iframe (src/aria/scene.ts).
+app.get("/aria/scene", (_req: Request, res: Response) => {
+  res.set({ "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=3600" }).send(ARIA_SCENE_HTML);
+});
 
 // The demo, built by `pnpm build:demo` into dist/demo. Static, same-origin with /mcp.
 const demoDir = join(dirname(fileURLToPath(import.meta.url)), "..", "dist", "demo");

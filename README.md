@@ -147,6 +147,8 @@ line about them. Details, endpoints, schema and limits: [docs/PATIENT_PORTAL.md]
 - **Talk.** The conversation beside a trace of every tool call and what it returned.
 - **Patient portal.** Today, a labelled history timeline, medicines with "I took it" through the same dose tool,
   the conversation pinned to the signed-in patient, and "who looked at my record".
+- **ARIA's face.** On the patient's "Talk to Nirog" tab, the mobile app's 3D nurse speaks the replies, lip-synced
+  to Polly's audio. The scene is the app's own, unmodified, in an iframe ([docs/3D_MODEL_MIGRATION.md](docs/3D_MODEL_MIGRATION.md)).
 
 ```bash
 pnpm dev:demo       # Vite on :5173 with hot reload, proxying to the server on :3333

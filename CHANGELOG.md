@@ -203,3 +203,10 @@ hackathon; this MCP server and Agent Skill are new.
 - The doctor's chart shows whether the patient has claimed their portal account, and the link code to give them.
 - Tests for the link code (once, one account), the child-only scope, cross-patient reads, forged, expired and
   missing tokens, and the public-demo chairs. 202 tests.
+- ARIA has a face. The mobile app's 3D nurse (Chloe: rigged, facial morph targets, idle clip) is on the patient
+  page's "Talk to Nirog" tab. The scene is byte-identical to the app's (`src/aria/nurseHtml.ts`); a shim gives it
+  the host it expects and turns its voice call into this server's Polly route with the patient's token
+  (`src/aria/scene.ts`, `GET /aria/scene`). While she is on screen the assistant's lines are spoken through her,
+  lip-synced to the real audio (`setSpeaker` in `demo/src/speech.ts`). The model was converted once with
+  glTF-Transform (quantized meshes, WebP textures): 14.9 MB to 6.3 MB, loaded only on that tab, skipped under
+  reduced motion or without WebGL. `docs/3D_MODEL_MIGRATION.md`.

@@ -7,6 +7,7 @@ import { stopSpeaking } from "../speech";
 import { useDemo } from "../store";
 import { useConversation } from "../voice/useConversation";
 import { VoiceBar } from "../voice/VoiceBar";
+import { AriaScene } from "./AriaScene";
 import { fetchMe, loadPatientSession, patientSession, savePatientSession, serverMode, type Encounter, type Me, type PatientHistory, type PatientSession, type Prescription } from "./auth";
 
 type Tab = "home" | "history" | "medicines" | "talk" | "profile";
@@ -253,7 +254,7 @@ function Portal({ session, me, loading, error, refresh, signOut }: { session: Pa
         {who && tab === "home" && <Home p={who} go={setTab} />}
         {who && tab === "history" && <History p={who} />}
         {who && tab === "medicines" && <Medicines p={who} token={session.token} refresh={refresh} />}
-        {who && tab === "talk" && <Talk p={who} convo={convo} />}
+        {who && tab === "talk" && <Talk p={who} convo={convo} token={session.token} />}
         {who && tab === "profile" && <Profile p={who} me={me!} signOut={signOut} />}
       </main>
       {tab === "talk" && <VoiceBar convo={convo} quiet />}
@@ -448,7 +449,7 @@ function Medicines({ p, token, refresh }: { p: PatientHistory; token: string; re
 }
 
 /* ── Talk ─────────────────────────────────────────────────────────────────── */
-function Talk({ p, convo }: { p: PatientHistory; convo: ReturnType<typeof useConversation> }) {
+function Talk({ p, convo, token }: { p: PatientHistory; convo: ReturnType<typeof useConversation>; token: string }) {
   const { turns, traces, reset } = useDemo();
   const { stop, settings, handle, phase } = convo;
   const busy = phase === "thinking" || phase === "listening";
@@ -462,6 +463,7 @@ function Talk({ p, convo }: { p: PatientHistory; convo: ReturnType<typeof useCon
     <>
       <div className="pgreet"><div><h1>Talk to Nirog.</h1><p>Say what hurts, in Hindi or English. Your words go on your record exactly as you say them. A serious symptom is passed to a doctor at once.</p></div></div>
       <div className="talk-pane">
+        <AriaScene token={token} />
         <div className="glass card convo-card">
           <div className="card-head"><span className="eyebrow">Speaking for {p.record.fullName}</span><button className="ghost" onClick={() => { stop(); reset(); }}>Start over</button></div>
           <div className="convo" ref={ref} aria-live="polite">

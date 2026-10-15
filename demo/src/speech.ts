@@ -70,12 +70,32 @@ let settle: (() => void) | null = null;
 let rate = 1;
 export const setSpeechRate = (r: number) => { rate = r; };
 let playing: HTMLAudioElement | null = null;
+/** Something else that can speak a line (ARIA's face on the patient page). Resolves when the line has been said. */
+export interface Speaker { say(text: string, language: Language): Promise<void>; stop(): void }
+let speaker: Speaker | null = null;
+export const setSpeaker = (s: Speaker | null) => { speaker = s; };
 let pollyDownUntil = 0;
 const announce = (text: string, language: Language) => window.dispatchEvent(new CustomEvent("nirog:speak", { detail: { text, language, rate, at: Date.now() } }));
 
 export function speak(text: string, onEnd?: () => void, language: Language = "en") {
   stopSpeaking();
   const mine = ticket;
+  if (speaker) {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(guard);
+      if (settle === finish) settle = null;
+      onEnd?.();
+    };
+    settle = finish;
+    // The scene reports when she finishes; this is the net under a report that never comes.
+    const guard = setTimeout(finish, Math.max(6000, text.split(/\s+/).length * 700));
+    announce(text, language);
+    void speaker.say(text, language).then(finish, finish);
+    return;
+  }
   if (Date.now() < pollyDownUntil || text.length > 600) return browserSpeak(text, onEnd, language);
   void (async () => {
     let url = "";
@@ -157,6 +177,7 @@ export function stopSpeaking() {
   ticket++;
   playing?.pause();
   playing = null;
+  speaker?.stop();
   const s = settle;
   settle = null;
   s?.();

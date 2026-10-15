@@ -46,9 +46,9 @@ becoming the whole product: a public landing page, a patient portal, the doctor 
 | 3. Server: patient accounts, link codes, `/auth/patient/session`, `/api/patient/me`, migration 0002, tests | done |
 | 4. Patient page: gate, Today, My history, Medicines, Talk, Me | done |
 | 5. Doctor chart shows the patient's portal status and link code | done |
-| 6. Chloe on "Talk to Nirog": compressed GLB, iframe scene, Polly voice, fallback | next |
-| 7. Body map for "where it hurt" | next |
-| 8. End-to-end story: patient speaks, doctor files, patient sees the plan | after 6 and 7 |
+| 6. Chloe on "Talk to Nirog": compressed GLB, iframe scene, Polly voice, fallback | done (`docs/3D_MODEL_MIGRATION.md`) |
+| 7. "Where it hurt": filter by the server's body regions on the history | done as chips; a drawn silhouette is optional polish |
+| 8. End-to-end story: patient speaks, doctor files, patient sees the plan | next |
 
 ## Risks
 

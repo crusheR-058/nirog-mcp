@@ -577,7 +577,17 @@ section { min-height: 100vh; min-height: 100dvh; padding: 120px 0 60px; scroll-m
 .toast { padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(61, 214, 195, 0.4); background: rgba(61, 214, 195, 0.08); font-size: 14px; }
 .toast.refused { border-color: rgba(224, 165, 38, 0.45); background: rgba(224, 165, 38, 0.08); }
 .talk-pane { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.talk-pane:has(.aria-stage) { grid-template-columns: minmax(260px, 360px) minmax(0, 1fr); align-items: start; }
 .talk-pane .convo { max-height: 50vh; }
+.aria-stage { position: relative; aspect-ratio: 3 / 4; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); background: #dbe7f9; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45); }
+.aria-stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; opacity: 0; transition: opacity 600ms var(--ease); }
+.aria-stage.ready iframe { opacity: 1; }
+.aria-loading { position: absolute; inset: 0; display: grid; place-items: center; align-content: center; gap: 6px; text-align: center; padding: 20px; color: #3a4a5c; background: radial-gradient(400px 300px at 50% 40%, #eef3f8, #dbe7f9); }
+.aria-loading .eyebrow { color: #1d6f66; }
+.aria-loading .muted { color: #5b6b7c; }
+.aria-tag { position: absolute; left: 12px; bottom: 12px; display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; padding: 5px 10px; border-radius: 999px; background: rgba(7, 11, 18, 0.72); color: var(--ink-2); border: 1px solid var(--line-2); }
+.aria-stage.speaking .aria-tag { color: var(--teal-2); border-color: rgba(61, 214, 195, 0.5); }
+.aria-stage.speaking .aria-tag .dot { background: var(--teal); box-shadow: 0 0 8px var(--teal); }
 .pick-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .pick-grid button { all: unset; cursor: pointer; display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--line-2); width: 100%; box-sizing: border-box; }
 .pick-grid button:hover { border-color: var(--teal); }
@@ -629,6 +639,8 @@ section { min-height: 100vh; min-height: 100dvh; padding: 120px 0 60px; scroll-m
   .home-grid .card.span2 { grid-column: auto; }
   .hist-list li { grid-template-columns: 1fr; gap: 6px; }
   .ptabs { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; justify-self: stretch; scrollbar-width: none; }
+  .talk-pane:has(.aria-stage) { grid-template-columns: 1fr; }
+  .aria-stage { aspect-ratio: auto; height: 320px; }
   .ptabs button { white-space: nowrap; }
   .who-pill > span:last-child { display: none; }
   .who-pill { padding-right: 4px; }
