@@ -468,7 +468,7 @@ function Talk({ p, convo, token }: { p: PatientHistory; convo: ReturnType<typeof
       <div className="talk-pane">
         <AriaScene token={token} />
         <div className="glass card convo-card">
-          <div className="card-head"><span className="eyebrow">Speaking for {p.record.fullName}</span><button className="ghost" onClick={() => { stop(); reset(); }}>Start over</button></div>
+          <div className="card-head"><span className="eyebrow">ARIA · with {firstName(p.record.fullName)}</span><button className="ghost" onClick={() => { stop(); reset(); }}>Start over</button></div>
           <div className="convo" ref={ref} aria-live="polite">
             {turns.length === 0 && (
               <div className="tries" lang={settings.language}>
@@ -476,7 +476,7 @@ function Talk({ p, convo, token }: { p: PatientHistory; convo: ReturnType<typeof
                 {TRY.map((t) => <button key={t} className="try" onClick={() => void handle(t)} disabled={busy}><span className="try-say">{t}</span></button>)}
               </div>
             )}
-            {turns.map((t) => <div key={t.id} className={`turn ${t.role} ${t.level ?? ""}`}><span className="who">{t.role === "user" ? "You" : "Nirog"}</span><span className="what">{t.text}</span></div>)}
+            {turns.map((t) => <div key={t.id} className={`turn ${t.role} ${t.level ?? ""}`}><span className="who">{t.role === "user" ? "You" : "ARIA"}</span><span className="what">{t.text}</span></div>)}
           </div>
           {steps.length > 0 && <p className="muted small" style={{ marginTop: 10 }}>What just happened: {steps.map((s) => s.error ? `${s.tool} refused` : s.tool.replace(/_/g, " ")).join(", ")}.</p>}
         </div>

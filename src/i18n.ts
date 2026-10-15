@@ -140,13 +140,14 @@ export const T = {
       : "I can't reach the clinic right now, so nobody has been told. If this feels serious, call 108 yourself.",
 
   /* care plan */
-  noPlan: (lang: Lang, name: string) =>
+  // `name` is null when the patient is speaking for themselves: then it is "you", not their name in the third person.
+  noPlan: (lang: Lang, name: string | null) =>
     lang === "hi"
-      ? `${name} का अभी कोई इलाज का प्लान दर्ज नहीं है। अगर कोई तकलीफ़ है तो मैं अभी पूछताछ शुरू कर सकती हूँ।`
-      : `${name} has no care plan on file yet. If something is bothering them, I can start an intake.`,
-  noActiveMeds: (lang: Lang, name: string) => (lang === "hi" ? `${name} की अभी कोई दवा चालू नहीं है।` : `${name} has no active medicines right now.`),
-  activeMeds: (lang: Lang, name: string, n: number, list: string) =>
-    lang === "hi" ? `${name} की ${n} दवा चालू है: ${list}।` : `${name} has ${n} active medicine${n > 1 ? "s" : ""}: ${list}.`,
+      ? `${name ? `${name} का` : "आपका"} अभी कोई इलाज का प्लान दर्ज नहीं है। अगर कोई तकलीफ़ है तो मैं अभी पूछताछ शुरू कर सकती हूँ।`
+      : `${name ? `${name} has` : "You have"} no care plan on file yet. If something is bothering ${name ? "them" : "you"}, I can start an intake.`,
+  noActiveMeds: (lang: Lang, name: string | null) => (lang === "hi" ? `${name ? `${name} की` : "आपकी"} अभी कोई दवा चालू नहीं है।` : `${name ? `${name} has` : "You have"} no active medicines right now.`),
+  activeMeds: (lang: Lang, name: string | null, n: number, list: string) =>
+    lang === "hi" ? `${name ? `${name} की` : "आपकी"} ${n} दवा चालू है: ${list}।` : `${name ? `${name} has` : "You have"} ${n} active medicine${n > 1 ? "s" : ""}: ${list}.`,
   pendingTests: (lang: Lang, tests: string[]) => (lang === "hi" ? `बाकी जाँचें: ${tests.join(" और ")}।` : `Pending tests: ${tests.join(" and ")}.`),
   followUp: (lang: Lang, status: "overdue" | "due_today" | "upcoming", days: number) => {
     if (lang === "hi") {
@@ -162,10 +163,10 @@ export const T = {
   and: (lang: Lang) => (lang === "hi" ? " और " : " and "),
 
   /* doses */
-  doseNoMeds: (lang: Lang, name: string) =>
+  doseNoMeds: (lang: Lang, name: string | null) =>
     lang === "hi"
-      ? `${name} के प्लान में अभी कोई दवा चालू नहीं है, इसलिए मैंने कुछ दर्ज नहीं किया।`
-      : `${name} has no active medicines on the care plan, so I have not recorded anything.`,
+      ? `${name ? `${name} के` : "आपके"} प्लान में अभी कोई दवा चालू नहीं है, इसलिए मैंने कुछ दर्ज नहीं किया।`
+      : `${name ? `${name} has` : "You have"} no active medicines on the care plan, so I have not recorded anything.`,
   doseWhich: (lang: Lang, list: string) => (lang === "hi" ? `कौन सी दवा ली? ${list}` : `Which medicine did you take? ${list}`),
   doseLogged: (lang: Lang, p: { drug: string; slot: string; time: string; next: string | null }) =>
     lang === "hi"

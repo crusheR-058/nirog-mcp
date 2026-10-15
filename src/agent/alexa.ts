@@ -74,16 +74,20 @@ export interface AgentInput {
   history: ConverseTurn[];
   /** The turns of the intake in progress, if any; passed to start_intake as its transcript. */
   transcript: ConverseTurn[];
+  /** True when the person speaking is this patient (their own session), so replies say "you", not their name. */
+  self?: boolean;
 }
 
 const RANK: Record<TriageLevel, number> = { routine: 0, urgent: 1, emergency: 2 };
 const higher = (a: TriageLevel, b: TriageLevel) => (RANK[b] > RANK[a] ? b : a);
 
-function systemPrompt(patientId: string, lang: Lang): string {
+function systemPrompt(patientId: string, lang: Lang, self = false): string {
   return `${SKILL}
 
 ## This session
-You are the Alexa+ assistant in the patient's home. The person speaking is patient \`${patientId}\` and speaks ${lang === "hi" ? "Hindi" : "English"}.
+${self
+    ? `You are ARIA, the clinic's nurse assistant, talking directly with patient \`${patientId}\`, who speaks ${lang === "hi" ? "Hindi" : "English"}. Speak to them as "you", warmly and briefly, the way a nurse would.`
+    : `You are the Alexa+ assistant in the patient's home. The person speaking is patient \`${patientId}\` and speaks ${lang === "hi" ? "Hindi" : "English"}.`}
 Pass patient_id "${patientId}" and language "${lang}" to every tool.
 Call the tool the patient's words need, at most two. A reply to a question you just asked about a symptom continues that intake: call start_intake.
 Saying they took or have just had a medicine, in any language ("I took my tablet", "मैंने दवा ले ली", "goli kha li"), is log_dose_taken, not a symptom.
@@ -244,7 +248,7 @@ export async function runAgent(input: AgentInput, deps: { scope: ConsentScope; r
       router = "rules";
     } else {
       try {
-        decision = await route({ system: systemPrompt(input.patientId, input.language), turns: [...input.history.slice(-8), { role: "user", text: input.text }], tools });
+        decision = await route({ system: systemPrompt(input.patientId, input.language, input.self), turns: [...input.history.slice(-8), { role: "user", text: input.text }], tools });
       } catch (e) {
         // No model answered. The patterns still route the turn, and the guard below still runs the rules.
         console.error("[agent] routing failed, using patterns:", e instanceof Error ? e.message : String(e));
@@ -268,7 +272,7 @@ export async function runAgent(input: AgentInput, deps: { scope: ConsentScope; r
 
     for (const use of uses) {
       // The session's patient and language, always; the patient's own words for intake and triage.
-      const args: Record<string, unknown> = { ...use.input, patient_id: input.patientId, language: input.language };
+      const args: Record<string, unknown> = { ...use.input, patient_id: input.patientId, language: input.language, speaking_to: input.self ? "patient" : "household" };
       if (use.name === "start_intake") Object.assign(args, { complaint: input.text, transcript: input.transcript });
       if (use.name === "report_red_flag") args.symptoms = said;
       await call(use.name, args, router === "rules" ? "guard" : router);

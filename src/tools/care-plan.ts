@@ -53,11 +53,16 @@ function medicationLine(item: PrescribedItem, startedAt: Date, now: Date): Medic
 }
 
 /** Pure function so it is unit-testable with a fixed `now`. */
-export function buildCarePlan(patient: PatientRecord, encounter: EncounterRecord | null, now: Date, lang: Lang = "en"): CarePlanSummary {
+/** Who the spoken line is for: the patient themselves ("you"), or someone speaking for them (their name). */
+export type SpeakingTo = "patient" | "household";
+export const speakingToInput = z.enum(["patient", "household"]).optional().describe('"patient" when the person speaking is the patient themselves, so the reply says "you"; "household" (default) when a family member or carer asks, so it uses the patient\'s name');
+
+export function buildCarePlan(patient: PatientRecord, encounter: EncounterRecord | null, now: Date, lang: Lang = "en", to: SpeakingTo = "household"): CarePlanSummary {
   const base = { id: patient.id, name: patient.fullName, conditions: patient.conditions, allergies: patient.allergies };
+  const name = to === "patient" ? null : patient.fullName;
 
   if (!encounter) {
-    return { patient: base, planFrom: null, chiefComplaint: null, medications: [], pendingTests: [], followUp: null, doctorInstructions: null, spoken: T.noPlan(lang, patient.fullName) };
+    return { patient: base, planFrom: null, chiefComplaint: null, medications: [], pendingTests: [], followUp: null, doctorInstructions: null, spoken: T.noPlan(lang, name) };
   }
 
   const startedAt = new Date(encounter.startedAt);
@@ -78,12 +83,12 @@ export function buildCarePlan(patient: PatientRecord, encounter: EncounterRecord
   }
 
   const parts: string[] = [];
-  if (active.length === 0) parts.push(T.noActiveMeds(lang, patient.fullName));
+  if (active.length === 0) parts.push(T.noActiveMeds(lang, name));
   else {
     const list = active
       .map((m) => `${m.drug} ${m.strength ?? ""} ${T.dose(lang, m.dose)} ${m.timesOfDay.map((s) => slotName(s, lang)).join(T.and(lang))}`.replace(/\s+/g, " ").trim())
       .join("; ");
-    parts.push(T.activeMeds(lang, patient.fullName, active.length, list));
+    parts.push(T.activeMeds(lang, name, active.length, list));
   }
   if (pendingTests.length) parts.push(T.pendingTests(lang, pendingTests));
   if (followUp) parts.push(T.followUp(lang, followUp.status, followUp.daysUntil));
@@ -110,9 +115,9 @@ export function registerCarePlanTool(server: McpServer, data: NirogData, scope: 
         "Returns the patient's current care plan from their last doctor consultation: active medicines with times of day, " +
         "pending tests, and when the next follow-up is due. Includes a `spoken` field ready to read aloud. " +
         "Use when the patient asks what medicines to take, whether tests are pending, or when to see the doctor next.",
-      inputSchema: { patient_id: z.string().describe("Nirog patient id, e.g. pat_rahul"), language: langInput },
+      inputSchema: { patient_id: z.string().describe("Nirog patient id, e.g. pat_rahul"), language: langInput, speaking_to: speakingToInput },
     },
-    async ({ patient_id, language }) => {
+    async ({ patient_id, language, speaking_to }) => {
       const lang: Lang = language ?? "en";
       const denied = consentDenial(scope, patient_id, lang);
       if (denied) {
@@ -124,7 +129,7 @@ export function registerCarePlanTool(server: McpServer, data: NirogData, scope: 
         return { isError: true, content: [{ type: "text", text: `No patient with id ${patient_id}.` }] };
       }
       const encounter = await data.getLatestEncounter(patient_id);
-      const plan = buildCarePlan(patient, encounter, now(), lang);
+      const plan = buildCarePlan(patient, encounter, now(), lang, speaking_to ?? "household");
       await audit(data, "Called get_care_plan", patient.fullName, "Patient asked about medicines or follow-up");
       return { content: [{ type: "text", text: JSON.stringify(plan) }], structuredContent: plan as unknown as Record<string, unknown> };
     },

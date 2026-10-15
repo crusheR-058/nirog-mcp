@@ -4,7 +4,7 @@ import { audit } from "../audit.js";
 import { consentDenial, type ConsentScope } from "../auth/consent.js";
 import type { NirogData } from "../data/types.js";
 import { langInput, T, type Lang } from "../i18n.js";
-import { buildCarePlan, type MedicationLine } from "./care-plan.js";
+import { buildCarePlan, speakingToInput, type MedicationLine, type SpeakingTo } from "./care-plan.js";
 
 /** The clinic's clock. Doses are counted per local day, not per UTC day. Default is IST. */
 const OFFSET_MS = Number(process.env.CLINIC_UTC_OFFSET_MINUTES ?? 330) * 60_000;
@@ -44,7 +44,7 @@ function pick(active: MedicationLine[], medicine?: string): MedicationLine | nul
   return active.length === 1 ? active[0] : null;
 }
 
-export async function runDose(data: NirogData, input: { patientId: string; medicine?: string; now?: Date; lang?: Lang }): Promise<DoseResult | { error: string }> {
+export async function runDose(data: NirogData, input: { patientId: string; medicine?: string; now?: Date; lang?: Lang; to?: SpeakingTo }): Promise<DoseResult | { error: string }> {
   const patient = await data.getPatient(input.patientId);
   if (!patient) return { error: `No patient with id ${input.patientId}.` };
   const now = input.now ?? new Date();
@@ -54,7 +54,7 @@ export async function runDose(data: NirogData, input: { patientId: string; medic
   const plan = buildCarePlan(patient, await data.getLatestEncounter(patient.id), now, lang);
   const active = plan.medications.filter((m) => m.status === "active");
   if (active.length === 0) {
-    return { patient: who, logged: false, reason: "no_active_medicines", drug: null, slot: null, today: null, remainingToday: [], spoken: T.doseNoMeds(lang, patient.fullName) };
+    return { patient: who, logged: false, reason: "no_active_medicines", drug: null, slot: null, today: null, remainingToday: [], spoken: T.doseNoMeds(lang, input.to === "patient" ? null : patient.fullName) };
   }
 
   const med = pick(active, input.medicine);
@@ -141,16 +141,17 @@ export function registerDoseTool(server: McpServer, data: NirogData, scope: Cons
         patient_id: z.string().describe("Nirog patient id"),
         medicine: z.string().max(80).optional().describe("The medicine named by the patient, if any, e.g. 'amlodipine' or 'the BP tablet'"),
         language: langInput,
+        speaking_to: speakingToInput,
       },
     },
-    async ({ patient_id, medicine, language }) => {
+    async ({ patient_id, medicine, language, speaking_to }) => {
       const lang: Lang = language ?? "en";
       const denied = consentDenial(scope, patient_id, lang);
       if (denied) {
         await audit(data, "Refused log_dose_taken", patient_id, "No consent for this patient on this device");
         return { isError: true, content: [{ type: "text", text: denied }] };
       }
-      const result = await runDose(data, { patientId: patient_id, medicine, now: now(), lang });
+      const result = await runDose(data, { patientId: patient_id, medicine, now: now(), lang, to: speaking_to ?? "household" });
       if ("error" in result) return { isError: true, content: [{ type: "text", text: result.error }] };
       return { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result as unknown as Record<string, unknown> };
     },

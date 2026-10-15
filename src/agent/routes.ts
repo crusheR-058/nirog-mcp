@@ -66,7 +66,9 @@ export function agentRoutes(secret?: string): Router {
       return;
     }
     try {
-      res.json(await runAgent(parsed.data, { scope: scopeFromAuth(req.auth) }));
+      // A patient's own session (from /auth/patient/session) is scoped under their id: then ARIA talks to them, not about them.
+      const self = req.auth?.clientId === `patient:${parsed.data.patientId}`;
+      res.json(await runAgent({ ...parsed.data, self }, { scope: scopeFromAuth(req.auth) }));
     } catch (e) {
       console.error("[agent] turn failed:", e instanceof Error ? e.message : String(e));
       res.status(503).json({ error: "The assistant could not answer just now." });

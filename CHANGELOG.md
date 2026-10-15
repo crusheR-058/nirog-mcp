@@ -210,3 +210,7 @@ hackathon; this MCP server and Agent Skill are new.
   lip-synced to the real audio (`setSpeaker` in `demo/src/speech.ts`). The model was converted once with
   glTF-Transform (quantized meshes, WebP textures): 14.9 MB to 6.3 MB, loaded only on that tab, skipped under
   reduced motion or without WebGL. `docs/3D_MODEL_MIGRATION.md`.
+- ARIA talks to the patient, not about them. When the session is the patient's own, the agent tells the tools
+  `speaking_to: "patient"` and the care-plan and dose lines say "you" ("You have 2 active medicines: ...") instead of
+  "Rahul Yadav has ..."; a family member asking about someone still hears the name. The agent's persona on the
+  patient page is ARIA, the clinic's nurse, speaking warmly and briefly. 203 tests.

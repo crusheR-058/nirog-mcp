@@ -51,3 +51,14 @@ describe("buildCarePlan", () => {
     expect(plan.spoken).toContain("no care plan on file");
   });
 });
+
+describe("speaking to the patient themselves", () => {
+  it('says "you" to the patient and their name to the household', () => {
+    const now = new Date("2026-10-15T10:00:00.000Z");
+    const rahul = MOCK_PATIENTS[0];
+    const enc = MOCK_ENCOUNTERS.find((e) => e.patientId === rahul.id)!;
+    expect(buildCarePlan(rahul, enc, now, "en", "patient").spoken).toMatch(/^You have 1 active medicine/);
+    expect(buildCarePlan(rahul, enc, now, "hi", "patient").spoken).toMatch(/^आपकी 1 दवा/);
+    expect(buildCarePlan(rahul, enc, now, "en").spoken).toMatch(/^Rahul Yadav has/);
+  });
+});
