@@ -224,8 +224,9 @@ function Portal({ session, me, loading, error, refresh, signOut }: { session: Pa
   // The conversation's tool results are the record changing: re-read it after each spoken reply.
   const turns = useDemo((s) => s.turns.length);
   useEffect(() => { if (turns) refresh(); }, [turns]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Leaving the page ends the conversation: the landing page must not inherit a patient's turns, nor a half-spoken line.
-  useEffect(() => () => { stopSpeaking(); useDemo.getState().reset(); }, []);
+  // The conversation belongs to this page: it starts clean, and the landing page must not inherit a patient's turns,
+  // nor a half-spoken line, when they leave.
+  useEffect(() => { useDemo.getState().reset(); return () => { stopSpeaking(); useDemo.getState().reset(); }; }, []);
   // A plan the doctor files in another room shows up here without a reload.
   useEffect(() => { const t = setInterval(refresh, 15_000); return () => clearInterval(t); }, [refresh]);
 
